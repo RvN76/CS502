@@ -20,15 +20,24 @@ typedef struct {
 	char process_name[16];
 	INT32 priority;
 	Z502CONTEXT *context;
+} PCB;
+
+typedef struct {
+	PCB *pcb;
 	INT32 time;
 	INT32 *next;
-} PCB;
+} TimerQueueNode;
+
+typedef struct {
+	PCB *pcb;
+	INT32 *next;
+} ReadyQueueNode;
 
 extern INT32 numOfProcesses;
 extern INT32 pidToAssign;
 extern PCB *currentPCB;
-extern PCB *TimerQueue;
-extern PCB *ReadyQueue;
+extern TimerQueueNode *TimerQueue;
+extern ReadyQueueNode *ReadyQueue;
 
 extern void osCreateProcess();
 
