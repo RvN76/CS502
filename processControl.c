@@ -223,7 +223,10 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 			}
 		} else {
 			currentPCB = ReadyQueue->pcb;
-			removeFromReadyQueue(currentPCB->pid);
+			ReadyQueueNode *p = ReadyQueue;
+			ReadyQueue = (ReadyQueueNode *) ReadyQueue->next;
+			free(p);
+//			removeFromReadyQueue(currentPCB->pid);
 			Z502SwitchContext(SWITCH_CONTEXT_KILL_MODE,
 					(void *) (&currentPCB->context));
 		}
@@ -293,8 +296,8 @@ void getProcessID(char *process_name, INT32 *process_id, INT32 *errCode) {
 
 void startTimer(INT32 timeToSet) {
 	INT32 time = timeToSet;
-	if (time < 6) {
-		time = 6;
+	if (time <= 3) {
+		time = 0;
 	}
 	CALL(MEM_WRITE(Z502TimerStart, &time));
 }
