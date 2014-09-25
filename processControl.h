@@ -49,11 +49,13 @@ extern void getProcessID();
 
 extern void sleepProcess();
 
+extern void wakeUpProcess();
+
 extern void startTimer();
 
-extern INT32 addToTimerQueue();
+extern void addToTimerQueue();
 
-extern void removeFromTimerQueue();
+extern INT32 removeFromTimerQueue();
 
 extern INT32 checkProcessParams();
 
