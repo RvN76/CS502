@@ -252,11 +252,9 @@ void test1c(void) {
     // receive an error on the system call.
 
     Z502_REG9 = ERR_SUCCESS;
-    INT32 count = 0;
     while (Z502_REG9 == ERR_SUCCESS) {
         SLEEP(sleep_time);
         GET_PROCESS_ID("test1c_e", &Z502_REG6, &Z502_REG9);
-        count ++;
     }
 
     TERMINATE_PROCESS(-2, &Z502_REG9); /* Terminate all */

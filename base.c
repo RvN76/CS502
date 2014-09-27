@@ -131,7 +131,8 @@ void svc(SYSTEM_CALL_DATA *SystemCallData) {
 	switch (call_type) {
 //  Get time service call
 	case SYSNUM_GET_TIME_OF_DAY:	//The value is found in syscalls.h
-		CALL(MEM_READ(Z502ClockStatus, &Time));
+		CALL(MEM_READ(Z502ClockStatus, &Time))
+		;
 		*(INT32 *) SystemCallData->Argument[0] = Time;
 		break;
 //	Call for a sleep
@@ -204,21 +205,28 @@ void osInit(int argc, char *argv[]) {
 
 	void *testToRun = NULL;
 
-	if ((argc > 1) && (strcmp(argv[1], "test0") == 0)) {
-		testToRun = (void *) test0;
-	}
+	if (argc > 1) {
+		if (strcmp(argv[1], "test0") == 0) {
+			testToRun = (void *) test0;
+			break;
+		}
 
-	if ((argc > 1) && (strcmp(argv[1], "test1a") == 0)) {
-		testToRun = (void *) test1a;
-	}
+		if (strcmp(argv[1], "test1a") == 0) {
+			testToRun = (void *) test1a;
+		}
 
-	if ((argc > 1) && (strcmp(argv[1], "test1b") == 0)) {
-		testToRun = (void *) test1b;
-	}
+		if (strcmp(argv[1], "test1b") == 0) {
+			testToRun = (void *) test1b;
+		}
 
-	if ((argc > 1) && (strcmp(argv[1], "test1c") == 0)) {
+		if (strcmp(argv[1], "test1c") == 0) {
 			testToRun = (void *) test1c;
 		}
+
+		if (strcmp(argv[1], "test1d") == 0) {
+			testToRun = (void *) test1d;
+		}
+	}
 
 	if (testToRun) {
 		osCreateProcess(testToRun);

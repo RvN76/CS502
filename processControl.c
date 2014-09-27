@@ -24,7 +24,7 @@ void osCreateProcess(void *starting_address) {
 	PCB *p = (PCB *) calloc(1, sizeof(PCB));
 	p->pid = pidToAssign;
 	strcpy(p->process_name, "osProcess");
-	p->priority = 20;
+	p->priority = 1000;
 	pidToAssign++;
 	p->context = (Z502CONTEXT *) next_context;
 	currentPCB = p;
@@ -56,101 +56,82 @@ void createProcess(char *process_name, void *entry, INT32 priority,
 }
 
 void sleepProcess(INT32 timeToSleep) {
-//	if (ReadyQueue || (!ReadyQueue && TimerQueue)) {
-//		INT32 startTime;
-//		CALL(MEM_READ(Z502ClockStatus, &startTime));
-//	}
 	if (!ReadyQueue && !TimerQueue) {
 		startTimer(timeToSleep);
 		Z502Idle();
 	} else {
+		if (timeToSleep <= 6) {
+			timeToSleep = 0;
+		}
 		INT32 startTime, absoluteTime;
 		CALL(MEM_READ(Z502ClockStatus, &startTime));
-		if (timeToSleep <= 6) {
-			absoluteTime = startTime;
+		absoluteTime = startTime + timeToSleep;
+		if (!ReadyQueue && absoluteTime < TimerQueue->time) {
+			startTimer(timeToSleep);
+			Z502Idle();
 		} else {
-			absoluteTime = startTime + timeToSleep - 6;
-		}
-		if (ReadyQueue) {
 			TimerQueueNode *node = (TimerQueueNode *) calloc(1,
 					sizeof(TimerQueueNode));
 			node->pcb = currentPCB;
 			node->time = absoluteTime;
 			node->next = NULL;
 			addToTimerQueue(node);
-			if (TimerQueue == node) {
-				if (timeToSleep <= 6) {
-					startTimer(0);
-				} else {
+			if (ReadyQueue) {
+				if (TimerQueue == node) {
 					startTimer(timeToSleep);
 				}
-			}
-			currentPCB = ReadyQueue->pcb;
-			ReadyQueueNode *p = ReadyQueue;
-			ReadyQueue = (ReadyQueueNode *) ReadyQueue->next;
-			free(p);
-			Z502SwitchContext(SWITCH_CONTEXT_SAVE_MODE,
-					(void *) (&currentPCB->context));
-		} else if (absoluteTime < TimerQueue->time) {
-			if (timeToSleep <= 6) {
-				startTimer(0);
+				currentPCB = ReadyQueue->pcb;
+				ReadyQueueNode *p = ReadyQueue;
+				ReadyQueue = ReadyQueue->next;
+				free(p);
 			} else {
-				startTimer(timeToSleep);
+				currentPCB = TimerQueue->pcb;
+				TimerQueueNode *p = TimerQueue;
+				TimerQueue = TimerQueue->next;
+				free(p);
+				Z502Idle();
 			}
-			Z502Idle();
-		} else {
-			TimerQueueNode *node = (TimerQueueNode *) calloc(1,
-					sizeof(TimerQueueNode));
-			node->pcb = currentPCB;
-			node->time = absoluteTime;
-			node->next = NULL;
-			addToTimerQueue(node);
-			currentPCB = TimerQueue->pcb;
-			TimerQueueNode *p = TimerQueue;
-			TimerQueue = (TimerQueueNode *) TimerQueue->next;
-			free(p);
-			Z502Idle();
 			Z502SwitchContext(SWITCH_CONTEXT_SAVE_MODE,
 					(void *) (&currentPCB->context));
 		}
-	}
-//	INT32 startTime;
-//	CALL(MEM_READ(Z502ClockStatus, &startTime));
-//	TimerQueueNode *node = (TimerQueueNode *) calloc(1, sizeof(TimerQueueNode));
-//	node->pcb = currentPCB;
-//	node->time = startTime + timeToSleep - 6;
-////	node->time = startTime + timeToSleep;
-//	node->next = NULL;
-//	INT32 result = -2;
-//	if (ReadyQueue) {
-//		result = addToTimerQueue(node);
-//	}
-//	if (!TimerQueue || result == 1) {
-//		startTimer(timeToSleep);
-//	}
-//	if (ReadyQueue) {
-//		currentPCB = ReadyQueue->pcb;
-//		removeFromReadyQueue(currentPCB->pid);
-////		ReadyQueueNode *p = ReadyQueue;
-////		ReadyQueue = (ReadyQueueNode *) ReadyQueue->next;
-////		free(p);
-//		Z502SwitchContext(SWITCH_CONTEXT_SAVE_MODE,
-//				(void *) (&currentPCB->context));
-//	} else {
-//		//currentPCB = NULL;
-//		Z502Idle();
-//		if (TimerQueue && result == 0) {
-//			currentPCB = TimerQueue->pcb;
-//			TimerQueueNode *p = TimerQueue;
-//			TimerQueue = (TimerQueueNode *) TimerQueue->next;
+//		if (ReadyQueue) {
+//			TimerQueueNode *node = (TimerQueueNode *) calloc(1,
+//					sizeof(TimerQueueNode));
+//			node->pcb = currentPCB;
+//			node->time = absoluteTime;
+//			node->next = NULL;
+//			addToTimerQueue(node);
+//			if (TimerQueue == node) {
+//				startTimer(timeToSleep);
+//			}
+//			currentPCB = ReadyQueue->pcb;
+//			ReadyQueueNode *p = ReadyQueue;
+//			ReadyQueue = ReadyQueue->next;
 //			free(p);
 //			Z502SwitchContext(SWITCH_CONTEXT_SAVE_MODE,
-//					(void *) &currentPCB->context);
+//					(void *) (&currentPCB->context));
+//		} else if (absoluteTime < TimerQueue->time) {
+//			startTimer(timeToSleep);
+//			Z502Idle();
+//		} else {
+//			TimerQueueNode *node = (TimerQueueNode *) calloc(1,
+//					sizeof(TimerQueueNode));
+//			node->pcb = currentPCB;
+//			node->time = absoluteTime;
+//			node->next = NULL;
+//			addToTimerQueue(node);
+//			currentPCB = TimerQueue->pcb;
+//			TimerQueueNode *p = TimerQueue;
+//			TimerQueue = TimerQueue->next;
+//			free(p);
+//			Z502Idle();
+//			Z502SwitchContext(SWITCH_CONTEXT_SAVE_MODE,
+//					(void *) (&currentPCB->context));
 //		}
-//	}
+	}
 }
 
-void wakeUpProcess() {
+void wakeUpProcesses() {
 	if (!TimerQueue) {
 		return;
 	}
@@ -161,22 +142,13 @@ void wakeUpProcess() {
 		if (pT->time > currentTime) {
 			break;
 		}
-		pT = (TimerQueueNode *) pT->next;
+		pT = pT->next;
 	}
-//	if (TimerQueue->next) {
-//		startTimer(
-//				((TimerQueueNode *) TimerQueue->next)->time - TimerQueue->time);
-//	}
 	if (pT) {
 		startTimer(pT->time - currentTime);
 	}
 
-//	INT32 readyQueueState = 0;
-//	if (ReadyQueue) {
-//		readyQueueState = 1;
-//	}
 	TimerQueueNode *pT1 = TimerQueue, *pT2;
-//	PCB *headPCB = TimerQueue->pcb;
 	ReadyQueueNode *node;
 	while (pT1 != pT) {
 		if (!(!currentPCB && pT1 == TimerQueue)) {
@@ -187,7 +159,7 @@ void wakeUpProcess() {
 			addToReadyQueue(node);
 		}
 		pT2 = pT1;
-		pT1 = (TimerQueueNode *) pT1->next;
+		pT1 = pT1->next;
 		free(pT2);
 	}
 	TimerQueue = pT1;
@@ -213,7 +185,7 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 			if (TimerQueue) {
 				currentPCB = TimerQueue->pcb;
 				TimerQueueNode *p = TimerQueue;
-				TimerQueue = (TimerQueueNode *) TimerQueue->next;
+				TimerQueue = TimerQueue->next;
 				free(p);
 				Z502Idle();
 				Z502SwitchContext(SWITCH_CONTEXT_KILL_MODE,
@@ -224,7 +196,7 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 		} else {
 			currentPCB = ReadyQueue->pcb;
 			ReadyQueueNode *p = ReadyQueue;
-			ReadyQueue = (ReadyQueueNode *) ReadyQueue->next;
+			ReadyQueue = ReadyQueue->next;
 			free(p);
 //			removeFromReadyQueue(currentPCB->pid);
 			Z502SwitchContext(SWITCH_CONTEXT_KILL_MODE,
@@ -278,7 +250,7 @@ void getProcessID(char *process_name, INT32 *process_id, INT32 *errCode) {
 			*errCode = ERR_SUCCESS;
 			return;
 		}
-		p = (ReadyQueueNode *) p->next;
+		p = p->next;
 	}
 
 	TimerQueueNode *q = TimerQueue;
@@ -288,7 +260,7 @@ void getProcessID(char *process_name, INT32 *process_id, INT32 *errCode) {
 			*errCode = ERR_SUCCESS;
 			return;
 		}
-		q = (TimerQueueNode *) q->next;
+		q = q->next;
 	}
 	*errCode = ERR_BAD_PARAM;
 	return;
@@ -296,7 +268,7 @@ void getProcessID(char *process_name, INT32 *process_id, INT32 *errCode) {
 
 void startTimer(INT32 timeToSet) {
 	INT32 time = timeToSet;
-	if (time <= 3) {
+	if (time <= 5) {
 		time = 0;
 	}
 	CALL(MEM_WRITE(Z502TimerStart, &time));
@@ -308,19 +280,19 @@ void addToTimerQueue(TimerQueueNode *node) {
 		return;
 	}
 	if (node->time < TimerQueue->time) {
-		node->next = (INT32 *) TimerQueue;
+		node->next = TimerQueue;
 		TimerQueue = node;
 		return;
 	}
 	TimerQueueNode *p = TimerQueue;
-	while ((TimerQueueNode *) p->next) {
-		if (((TimerQueueNode *) p->next)->time > node->time) {
+	while (p->next) {
+		if (p->next->time > node->time) {
 			break;
 		}
-		p = (TimerQueueNode *) p->next;
+		p = p->next;
 	}
 	node->next = p->next;
-	p->next = (INT32 *) node;
+	p->next = node;
 	return;
 }
 
@@ -330,20 +302,20 @@ INT32 removeFromTimerQueue(INT32 pid) {
 	}
 	TimerQueueNode *p = TimerQueue;
 	if (p->pcb->pid == pid) {
-		TimerQueue = (TimerQueueNode *) p->next;
+		TimerQueue = p->next;
 		free(p);
 		return ERR_SUCCESS;
 	}
 	while (p->next) {
-		if (((TimerQueueNode *) p->next)->pcb->pid == pid) {
+		if (p->next->pcb->pid == pid) {
 			break;
 		}
-		p = (TimerQueueNode *) p->next;
+		p = p->next;
 	}
 	if (!p->next) {
 		return ERR_BAD_PARAM;
 	}
-	TimerQueueNode *q = (TimerQueueNode *) p->next;
+	TimerQueueNode *q = p->next;
 	p->next = q->next;
 	free(q);
 	return ERR_SUCCESS;
@@ -370,7 +342,7 @@ INT32 checkProcessParams(char *process_name, void *entry, INT32 priority) {
 		if (strcmp(pR->pcb->process_name, process_name) == 0) {
 			return ERR_BAD_PARAM;
 		}
-		pR = (ReadyQueueNode *) pR->next;
+		pR = pR->next;
 	}
 
 	TimerQueueNode *pT = TimerQueue;
@@ -378,7 +350,7 @@ INT32 checkProcessParams(char *process_name, void *entry, INT32 priority) {
 		if (strcmp(pT->pcb->process_name, process_name) == 0) {
 			return ERR_BAD_PARAM;
 		}
-		pT = (TimerQueueNode *) pT->next;
+		pT = pT->next;
 	}
 	return ERR_SUCCESS;
 }
@@ -389,19 +361,19 @@ void addToReadyQueue(ReadyQueueNode *node) {
 		return;
 	}
 	if (ReadyQueue->pcb->priority < node->pcb->priority) {
-		node->next = (INT32 *) ReadyQueue;
+		node->next = ReadyQueue;
 		ReadyQueue = node;
 		return;
 	}
 	ReadyQueueNode *p = ReadyQueue;
 	while (p->next) {
-		if (((ReadyQueueNode *) p->next)->pcb->priority < node->pcb->priority) {
+		if (p->next->pcb->priority < node->pcb->priority) {
 			break;
 		}
-		p = (ReadyQueueNode *) p->next;
+		p = p->next;
 	}
 	node->next = p->next;
-	p->next = (INT32 *) node;
+	p->next = node;
 }
 
 INT32 removeFromReadyQueue(INT32 pid) {
@@ -410,20 +382,20 @@ INT32 removeFromReadyQueue(INT32 pid) {
 	}
 	ReadyQueueNode *p = ReadyQueue;
 	if (p->pcb->pid == pid) {
-		ReadyQueue = (ReadyQueueNode *) p->next;
+		ReadyQueue = p->next;
 		free(p);
 		return ERR_SUCCESS;
 	}
 	while (p->next) {
-		if (((ReadyQueueNode *) p->next)->pcb->pid == pid) {
+		if (p->next->pcb->pid == pid) {
 			break;
 		}
-		p = (ReadyQueueNode *) p->next;
+		p = p->next;
 	}
 	if (!p->next) {
 		return ERR_BAD_PARAM;
 	}
-	ReadyQueueNode *q = (ReadyQueueNode *) p->next;
+	ReadyQueueNode *q = p->next;
 	p->next = q->next;
 	free(q);
 	return ERR_SUCCESS;

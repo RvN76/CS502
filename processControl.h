@@ -22,15 +22,15 @@ typedef struct {
 	Z502CONTEXT *context;
 } PCB;
 
-typedef struct {
+typedef struct tNode{
 	PCB *pcb;
 	INT32 time;
-	INT32 *next;
+	struct tNode *next;
 } TimerQueueNode;
 
-typedef struct {
+typedef struct rNode{
 	PCB *pcb;
-	INT32 *next;
+	struct rNode *next;
 } ReadyQueueNode;
 
 extern INT32 numOfProcesses;
@@ -49,7 +49,7 @@ extern void getProcessID();
 
 extern void sleepProcess();
 
-extern void wakeUpProcess();
+extern void wakeUpProcesses();
 
 extern void startTimer();
 

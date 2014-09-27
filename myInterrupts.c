@@ -9,5 +9,5 @@
 #include "processControl.h"
 
 void timerInterrupt() {
-	wakeUpProcess();
+	wakeUpProcesses();
 }
