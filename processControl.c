@@ -56,6 +56,7 @@ void createProcess(char *process_name, void *entry, INT32 priority,
 }
 
 void sleepProcess(INT32 timeToSleep) {
+
 	if (!ReadyQueue && !TimerQueue) {
 		startTimer(timeToSleep);
 		Z502Idle();
@@ -198,7 +199,6 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 			ReadyQueueNode *p = ReadyQueue;
 			ReadyQueue = ReadyQueue->next;
 			free(p);
-//			removeFromReadyQueue(currentPCB->pid);
 			Z502SwitchContext(SWITCH_CONTEXT_KILL_MODE,
 					(void *) (&currentPCB->context));
 		}
@@ -214,25 +214,6 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 		}
 		break;
 	}
-//	if (pid == -1) {
-//		if (!ReadyQueue && !TimerQueue) {
-//			Z502Halt();
-//		} else {
-//			free(currentPCB);
-//			currentPCB = ReadyQueue->pcb;
-//			*errCode = removeFromReadyQueue(currentPCB->pid);
-//			Z502SwitchContext(SWITCH_CONTEXT_KILL_MODE,
-//					(void *) (&currentPCB->context));
-//		}
-//	} else {
-//		*errCode = removeFromReadyQueue(pid);
-//	}
-//	if (*errCode == ERR_SUCCESS) {
-//		numOfProcesses--;
-//	}
-//	if (numOfProcesses == 0) {
-//		Z502Halt();
-//	}
 }
 
 void getProcessID(char *process_name, INT32 *process_id, INT32 *errCode) {

@@ -208,7 +208,6 @@ void osInit(int argc, char *argv[]) {
 	if (argc > 1) {
 		if (strcmp(argv[1], "test0") == 0) {
 			testToRun = (void *) test0;
-			break;
 		}
 
 		if (strcmp(argv[1], "test1a") == 0) {
