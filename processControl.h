@@ -22,22 +22,25 @@ typedef struct {
 	Z502CONTEXT *context;
 } PCB;
 
-typedef struct tNode{
+typedef struct tNode {
 	PCB *pcb;
 	INT32 time;
+	struct tNode *previous;
 	struct tNode *next;
 } TimerQueueNode;
 
-typedef struct rNode{
+typedef struct rNode {
 	PCB *pcb;
+	struct rNode *previous;
 	struct rNode *next;
-} ReadyQueueNode;
+} RSQueueNode;
 
 extern INT32 numOfProcesses;
 extern INT32 pidToAssign;
 extern PCB *currentPCB;
 extern TimerQueueNode *TimerQueue;
-extern ReadyQueueNode *ReadyQueue;
+extern RSQueueNode *ReadyQueue;
+extern RSQueueNode *SuspendQueue;
 
 extern void osCreateProcess();
 
@@ -51,15 +54,23 @@ extern void sleepProcess();
 
 extern void wakeUpProcesses();
 
+extern void suspendProcess();
+
+extern void resumeProcess();
+
 extern void startTimer();
 
 extern void addToTimerQueue();
+
+extern TimerQueueNode *searchInTimerQueue();
 
 extern INT32 removeFromTimerQueue();
 
 extern INT32 checkProcessParams();
 
-extern void addToReadyQueue();
+extern void addToRSQueue();
 
-extern INT32 removeFromReadyQueue();
+extern RSQueueNode *searchInRSQueue();
+
+extern INT32 removeFromRSQueue();
 

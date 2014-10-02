@@ -16,7 +16,8 @@ INT32 numOfProcesses = 0;
 INT32 pidToAssign = 0;
 PCB *currentPCB = NULL;
 TimerQueueNode *TimerQueue = NULL;
-ReadyQueueNode *ReadyQueue = NULL;
+RSQueueNode *ReadyQueue = NULL;
+RSQueueNode *SuspendQueue = NULL;
 
 void osCreateProcess(void *starting_address) {
 	void *next_context;
@@ -43,11 +44,11 @@ void createProcess(char *process_name, void *entry, INT32 priority,
 		p->context = (Z502CONTEXT *) next_context;
 		p->pid = pidToAssign;
 		p->priority = priority;
-		ReadyQueueNode *node = (ReadyQueueNode *) calloc(1,
-				sizeof(ReadyQueueNode));
+		RSQueueNode *node = (RSQueueNode *) calloc(1, sizeof(RSQueueNode));
 		node->pcb = p;
+		node->previous = NULL;
 		node->next = NULL;
-		addToReadyQueue(node);
+		addToRSQueue(node, &ReadyQueue);
 		numOfProcesses++;
 		*pidToReturn = p->pid;
 		pidToAssign++;
@@ -56,7 +57,6 @@ void createProcess(char *process_name, void *entry, INT32 priority,
 }
 
 void sleepProcess(INT32 timeToSleep) {
-
 	if (!ReadyQueue && !TimerQueue) {
 		startTimer(timeToSleep);
 		Z502Idle();
@@ -76,19 +76,26 @@ void sleepProcess(INT32 timeToSleep) {
 			node->pcb = currentPCB;
 			node->time = absoluteTime;
 			node->next = NULL;
+			node->previous = NULL;
 			addToTimerQueue(node);
 			if (ReadyQueue) {
 				if (TimerQueue == node) {
 					startTimer(timeToSleep);
 				}
 				currentPCB = ReadyQueue->pcb;
-				ReadyQueueNode *p = ReadyQueue;
+				RSQueueNode *p = ReadyQueue;
 				ReadyQueue = ReadyQueue->next;
+				if (ReadyQueue) {
+					ReadyQueue->previous = NULL;
+				}
 				free(p);
 			} else {
 				currentPCB = TimerQueue->pcb;
 				TimerQueueNode *p = TimerQueue;
 				TimerQueue = TimerQueue->next;
+				if (TimerQueue) {
+					TimerQueue->previous = NULL;
+				}
 				free(p);
 				Z502Idle();
 			}
@@ -150,20 +157,56 @@ void wakeUpProcesses() {
 	}
 
 	TimerQueueNode *pT1 = TimerQueue, *pT2;
-	ReadyQueueNode *node;
+	RSQueueNode *node;
 	while (pT1 != pT) {
-		if (!(!currentPCB && pT1 == TimerQueue)) {
-			PCB *p = pT1->pcb;
-			node = (ReadyQueueNode *) calloc(1, sizeof(ReadyQueueNode));
-			node->pcb = p;
-			node->next = NULL;
-			addToReadyQueue(node);
-		}
+		PCB *p = pT1->pcb;
+		node = (RSQueueNode *) calloc(1, sizeof(RSQueueNode));
+		node->pcb = p;
+		node->next = NULL;
+		node->previous = NULL;
+		addToRSQueue(node, &ReadyQueue);
 		pT2 = pT1;
 		pT1 = pT1->next;
 		free(pT2);
 	}
 	TimerQueue = pT1;
+	if (TimerQueue) {
+		TimerQueue->previous = NULL;
+	}
+}
+
+//void suspendProcess(INT32 pid, INT32 *errCode) {
+//	if (pid == -1 || pid == currentPCB->pid) {
+//		//pid = currentPCB->pid;
+//		RSQueueNode *p = (RSQueueNode *) calloc(1, sizeof(RSQueueNode));
+//		p->pcb = currentPCB;
+//		p->next = NULL;
+//		addToSuspendQueue(p);
+//		if (ReadyQueue) {
+//			currentPCB = ReadyQueue->pcb;
+//			RSQueueNode *q = ReadyQueue;
+//			ReadyQueue = ReadyQueue->next;
+//			free(q);
+//		} else {
+//			currentPCB = TimerQueue->pcb;
+//			TimerQueueNode *q = TimerQueue;
+//			TimerQueue = TimerQueue->next;
+//			free(q);
+//			Z502Idle();
+//		}
+//		*errCode = ERR_SUCCESS;
+//		Z502SwitchContext(SWITCH_CONTEXT_SAVE_MODE,
+//				(void *) (&currentPCB->context));
+//	} else {
+//		RSQueueNode *p = searchInRSQueue(pid);
+//		if (!p) {
+//			*errCode = ERR_SUCCESS;
+//		}
+//	}
+//}
+
+void resumeProcess(INT32 pid, INT32 *errCode) {
+
 }
 
 void terminateProcess(INT32 pid, INT32 *errCode) {
@@ -173,7 +216,6 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 	} else {
 		pidToTerminate = pid;
 	}
-	INT32 result;
 	switch (pidToTerminate) {
 	case -2:
 		*errCode = ERR_SUCCESS;
@@ -187,6 +229,9 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 				currentPCB = TimerQueue->pcb;
 				TimerQueueNode *p = TimerQueue;
 				TimerQueue = TimerQueue->next;
+				if (TimerQueue) {
+					TimerQueue->previous = NULL;
+				}
 				free(p);
 				Z502Idle();
 				Z502SwitchContext(SWITCH_CONTEXT_KILL_MODE,
@@ -196,23 +241,27 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 			}
 		} else {
 			currentPCB = ReadyQueue->pcb;
-			ReadyQueueNode *p = ReadyQueue;
+			RSQueueNode *p = ReadyQueue;
 			ReadyQueue = ReadyQueue->next;
+			if (ReadyQueue) {
+				ReadyQueue->previous = NULL;
+			}
 			free(p);
 			Z502SwitchContext(SWITCH_CONTEXT_KILL_MODE,
 					(void *) (&currentPCB->context));
 		}
 		break;
-	default:
-		result = removeFromReadyQueue(pidToTerminate);
+	default: {
+		INT32 result = removeFromRSQueue(pidToTerminate, &ReadyQueue);
 		if (result != ERR_SUCCESS) {
 			result = removeFromTimerQueue(pidToTerminate);
 		}
-		*errCode = result;
 		if (result == ERR_SUCCESS) {
 			numOfProcesses--;
 		}
+		*errCode = result;
 		break;
+	}
 	}
 }
 
@@ -224,7 +273,7 @@ void getProcessID(char *process_name, INT32 *process_id, INT32 *errCode) {
 		return;
 	}
 
-	ReadyQueueNode *p = ReadyQueue;
+	RSQueueNode *p = ReadyQueue;
 	while (p) {
 		if (strcmp(p->pcb->process_name, process_name) == 0) {
 			*process_id = p->pcb->pid;
@@ -262,6 +311,7 @@ void addToTimerQueue(TimerQueueNode *node) {
 	}
 	if (node->time < TimerQueue->time) {
 		node->next = TimerQueue;
+		TimerQueue->previous = node;
 		TimerQueue = node;
 		return;
 	}
@@ -272,34 +322,50 @@ void addToTimerQueue(TimerQueueNode *node) {
 		}
 		p = p->next;
 	}
+
+	node->previous = p;
 	node->next = p->next;
+	if (p->next) {
+		p->next->previous = node;
+	}
 	p->next = node;
 	return;
 }
 
-INT32 removeFromTimerQueue(INT32 pid) {
+TimerQueueNode *searchInTimerQueue(INT32 pid) {
+	//TimerQueueNode *node = NULL;
 	if (!TimerQueue) {
-		return ERR_BAD_PARAM;
+		return NULL;
 	}
 	TimerQueueNode *p = TimerQueue;
-	if (p->pcb->pid == pid) {
-		TimerQueue = p->next;
-		free(p);
-		return ERR_SUCCESS;
-	}
-	while (p->next) {
-		if (p->next->pcb->pid == pid) {
-			break;
+	while (p) {
+		if (p->pcb->pid == pid) {
+			return p;
 		}
 		p = p->next;
 	}
-	if (!p->next) {
+	return NULL;
+}
+
+INT32 removeFromTimerQueue(INT32 pid) {
+	TimerQueueNode *p = searchInTimerQueue(pid);
+	if (!p) {
 		return ERR_BAD_PARAM;
+	} else {
+		if (p == TimerQueue) {
+			TimerQueue = p->next;
+			if (TimerQueue) {
+				TimerQueue->previous = NULL;
+			}
+		} else {
+			p->previous->next = p->next;
+			if (p->next) {
+				p->next->previous = p->previous;
+			}
+		}
+		free(p);
+		return ERR_SUCCESS;
 	}
-	TimerQueueNode *q = p->next;
-	p->next = q->next;
-	free(q);
-	return ERR_SUCCESS;
 }
 
 INT32 checkProcessParams(char *process_name, void *entry, INT32 priority) {
@@ -318,7 +384,7 @@ INT32 checkProcessParams(char *process_name, void *entry, INT32 priority) {
 		return ERR_BAD_PARAM;
 	}
 
-	ReadyQueueNode *pR = ReadyQueue;
+	RSQueueNode *pR = ReadyQueue;
 	while (pR) {
 		if (strcmp(pR->pcb->process_name, process_name) == 0) {
 			return ERR_BAD_PARAM;
@@ -336,17 +402,18 @@ INT32 checkProcessParams(char *process_name, void *entry, INT32 priority) {
 	return ERR_SUCCESS;
 }
 
-void addToReadyQueue(ReadyQueueNode *node) {
-	if (!ReadyQueue) {
-		ReadyQueue = node;
+void addToRSQueue(RSQueueNode *node, RSQueueNode **queueHead) {
+	if (!*queueHead) {
+		*queueHead = node;
 		return;
 	}
-	if (ReadyQueue->pcb->priority < node->pcb->priority) {
-		node->next = ReadyQueue;
-		ReadyQueue = node;
+	if ((*queueHead)->pcb->priority < node->pcb->priority) {
+		node->next = *queueHead;
+		(*queueHead)->previous = node;
+		*queueHead = node;
 		return;
 	}
-	ReadyQueueNode *p = ReadyQueue;
+	RSQueueNode *p = *queueHead;
 	while (p->next) {
 		if (p->next->pcb->priority < node->pcb->priority) {
 			break;
@@ -354,30 +421,45 @@ void addToReadyQueue(ReadyQueueNode *node) {
 		p = p->next;
 	}
 	node->next = p->next;
+	node->previous = p;
+
+	if (p->next) {
+		p->next->previous = node;
+	}
 	p->next = node;
 }
 
-INT32 removeFromReadyQueue(INT32 pid) {
-	if (!ReadyQueue) {
-		return ERR_BAD_PARAM;
+RSQueueNode *searchInRSQueue(INT32 pid, RSQueueNode *queueHead) {
+	if (!queueHead) {
+		return NULL;
 	}
-	ReadyQueueNode *p = ReadyQueue;
-	if (p->pcb->pid == pid) {
-		ReadyQueue = p->next;
-		free(p);
-		return ERR_SUCCESS;
-	}
-	while (p->next) {
-		if (p->next->pcb->pid == pid) {
-			break;
+	RSQueueNode *p = queueHead;
+	while (p) {
+		if (p->pcb->pid == pid) {
+			return p;
 		}
 		p = p->next;
 	}
-	if (!p->next) {
+	return NULL;
+}
+
+INT32 removeFromRSQueue(INT32 pid, RSQueueNode **queueHead) {
+	RSQueueNode *p = searchInRSQueue(pid, *queueHead);
+	if (!p) {
 		return ERR_BAD_PARAM;
+	} else {
+		if (p == *queueHead) {
+			*queueHead = p->next;
+			if (*queueHead) {
+				(*queueHead)->previous = NULL;
+			}
+		} else {
+			p->previous->next = p->next;
+			if (p->next) {
+				p->next->previous = p->previous;
+			}
+		}
+		free(p);
+		return ERR_SUCCESS;
 	}
-	ReadyQueueNode *q = p->next;
-	p->next = q->next;
-	free(q);
-	return ERR_SUCCESS;
 }
