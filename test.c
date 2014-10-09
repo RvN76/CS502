@@ -446,16 +446,16 @@ void test1f(void) {
         // scheduling behavior where the processes are yanked out of the
         // ready and the waiting states, and placed into the suspended state.
 
-        SUSPEND_PROCESS(Z502_REG3, &Z502_REG9);
-        SUSPEND_PROCESS(Z502_REG5, &Z502_REG9);
-        SUSPEND_PROCESS(Z502_REG7, &Z502_REG9);
+//        SUSPEND_PROCESS(Z502_REG3, &Z502_REG9);
+//        SUSPEND_PROCESS(Z502_REG5, &Z502_REG9);
+//        SUSPEND_PROCESS(Z502_REG7, &Z502_REG9);
 
         // Sleep so we can watch the scheduling action
         SLEEP(sleep_time);
 
-        RESUME_PROCESS(Z502_REG3, &Z502_REG9);
-        RESUME_PROCESS(Z502_REG5, &Z502_REG9);
-        RESUME_PROCESS(Z502_REG7, &Z502_REG9);
+//        RESUME_PROCESS(Z502_REG3, &Z502_REG9);
+//        RESUME_PROCESS(Z502_REG5, &Z502_REG9);
+//        RESUME_PROCESS(Z502_REG7, &Z502_REG9);
     }
 
     //   Wait for children to finish, then quit
@@ -1142,8 +1142,8 @@ void test1x(void) {
         RandomSleep = (RandomSleep * Z502_REG3) % 143;
         SLEEP(RandomSleep);
         GET_TIME_OF_DAY(&Z502_REG4);
-        printf("Test1X: Pid = %d, Sleep Time = %ld, Latency Time = %d\n",
-                (int) Z502_REG2, RandomSleep, (int) (Z502_REG4 - Z502_REG3));
+//        printf("Test1X: Pid = %d, Sleep Time = %ld, Latency Time = %d\n",
+//                (int) Z502_REG2, RandomSleep, (int) (Z502_REG4 - Z502_REG3));
     }
     printf("Test1x, PID %ld, Ends at Time %ld\n", Z502_REG2, Z502_REG4);
 

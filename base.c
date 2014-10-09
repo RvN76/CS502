@@ -62,8 +62,8 @@ void interrupt_handler(void) {
 	/** REMOVE THE NEXT SIX LINES **/
 	how_many_interrupt_entries++; /** TEMP **/
 	if (remove_this_in_your_code && (how_many_interrupt_entries < 20)) {
-		printf("Interrupt_handler: Found device ID %d with status %d\n",
-				device_id, status);
+//		printf("Interrupt_handler: Found device ID %d with status %d\n",
+//				device_id, status);
 	}
 
 	//Call the timerInterrupt() routine

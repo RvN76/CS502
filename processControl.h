@@ -14,6 +14,10 @@
 #include "Z502.h"
 
 #include "stdlib.h"
+#include "stdbool.h"
+
+#define USER 		1
+#define INTERRUPT	0
 
 typedef struct {
 	INT32 pid;
@@ -41,6 +45,9 @@ extern PCB *currentPCB;
 extern TimerQueueNode *TimerQueue;
 extern RSQueueNode *ReadyQueue;
 extern RSQueueNode *SuspendQueue;
+
+extern INT32 prioritiveProcess;
+extern bool tryingToHandle[2];
 
 extern void osCreateProcess();
 

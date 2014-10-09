@@ -19,6 +19,9 @@ TimerQueueNode *TimerQueue = NULL;
 RSQueueNode *ReadyQueue = NULL;
 RSQueueNode *SuspendQueue = NULL;
 
+INT32 prioritiveProcess = -1;
+bool tryingToHandle[2] = { false, false };
+
 void osCreateProcess(void *starting_address) {
 	void *next_context;
 	Z502MakeContext(&next_context, starting_address, USER_MODE);
@@ -35,6 +38,16 @@ void osCreateProcess(void *starting_address) {
 
 void createProcess(char *process_name, void *entry, INT32 priority,
 		INT32 *pidToReturn, INT32 *errCode) {
+	tryingToHandle[USER] = true;
+	prioritiveProcess = INTERRUPT;
+	int c = 0;
+	while (tryingToHandle[INTERRUPT] == true && prioritiveProcess == INTERRUPT) {
+		if (c == 0) {
+			printf("blocked by INTERRUPT, wait\n");
+			c = 1;
+		}
+		continue;
+	}
 	INT32 checkResult = checkProcessParams(process_name, entry, priority);
 	if (checkResult == ERR_SUCCESS) {
 		PCB *p = (PCB *) calloc(1, sizeof(PCB));
@@ -53,21 +66,47 @@ void createProcess(char *process_name, void *entry, INT32 priority,
 		*pidToReturn = p->pid;
 		pidToAssign++;
 	}
+	tryingToHandle[USER] = false;
 	*errCode = checkResult;
 }
 
 void sleepProcess(INT32 timeToSleep) {
+	tryingToHandle[USER] = true;
+	prioritiveProcess = INTERRUPT;
+	int c = 0;
+	while (tryingToHandle[INTERRUPT] == true && prioritiveProcess == INTERRUPT) {
+		if (c == 0) {
+			printf("blocked by INTERRUPT, wait\n");
+			c = 1;
+		}
+		continue;
+	}
 	if (!ReadyQueue && !TimerQueue) {
+		tryingToHandle[USER] = false;
 		startTimer(timeToSleep);
 		Z502Idle();
 	} else {
+		tryingToHandle[USER] = false;
 		if (timeToSleep <= 6) {
 			timeToSleep = 0;
+		} else {
+			timeToSleep -= 6;
 		}
 		INT32 startTime, absoluteTime;
 		CALL(MEM_READ(Z502ClockStatus, &startTime));
 		absoluteTime = startTime + timeToSleep;
+		tryingToHandle[USER] = true;
+		prioritiveProcess = INTERRUPT;
+		int c1 = 0;
+		while (tryingToHandle[INTERRUPT] == true && prioritiveProcess == INTERRUPT) {
+			if (c1 == 0) {
+				printf("blocked by INTERRUPT, wait\n");
+				c1 = 1;
+			}
+			continue;
+		}
 		if (!ReadyQueue && absoluteTime < TimerQueue->time) {
+			tryingToHandle[USER] = false;
 			startTimer(timeToSleep);
 			Z502Idle();
 		} else {
@@ -89,6 +128,7 @@ void sleepProcess(INT32 timeToSleep) {
 					ReadyQueue->previous = NULL;
 				}
 				free(p);
+				tryingToHandle[USER] = false;
 			} else {
 				currentPCB = TimerQueue->pcb;
 				TimerQueueNode *p = TimerQueue;
@@ -97,45 +137,12 @@ void sleepProcess(INT32 timeToSleep) {
 					TimerQueue->previous = NULL;
 				}
 				free(p);
+				tryingToHandle[USER] = false;
 				Z502Idle();
 			}
 			Z502SwitchContext(SWITCH_CONTEXT_SAVE_MODE,
 					(void *) (&currentPCB->context));
 		}
-//		if (ReadyQueue) {
-//			TimerQueueNode *node = (TimerQueueNode *) calloc(1,
-//					sizeof(TimerQueueNode));
-//			node->pcb = currentPCB;
-//			node->time = absoluteTime;
-//			node->next = NULL;
-//			addToTimerQueue(node);
-//			if (TimerQueue == node) {
-//				startTimer(timeToSleep);
-//			}
-//			currentPCB = ReadyQueue->pcb;
-//			ReadyQueueNode *p = ReadyQueue;
-//			ReadyQueue = ReadyQueue->next;
-//			free(p);
-//			Z502SwitchContext(SWITCH_CONTEXT_SAVE_MODE,
-//					(void *) (&currentPCB->context));
-//		} else if (absoluteTime < TimerQueue->time) {
-//			startTimer(timeToSleep);
-//			Z502Idle();
-//		} else {
-//			TimerQueueNode *node = (TimerQueueNode *) calloc(1,
-//					sizeof(TimerQueueNode));
-//			node->pcb = currentPCB;
-//			node->time = absoluteTime;
-//			node->next = NULL;
-//			addToTimerQueue(node);
-//			currentPCB = TimerQueue->pcb;
-//			TimerQueueNode *p = TimerQueue;
-//			TimerQueue = TimerQueue->next;
-//			free(p);
-//			Z502Idle();
-//			Z502SwitchContext(SWITCH_CONTEXT_SAVE_MODE,
-//					(void *) (&currentPCB->context));
-//		}
 	}
 }
 
@@ -224,6 +231,16 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 	case -1:
 		*errCode = ERR_SUCCESS;
 		numOfProcesses--;
+		tryingToHandle[USER] = true;
+		prioritiveProcess = INTERRUPT;
+		int c = 0;
+		while (tryingToHandle[INTERRUPT] == true && prioritiveProcess == INTERRUPT) {
+			if (c == 0) {
+				printf("blocked by INTERRUPT, wait\n");
+				c = 1;
+			}
+			continue;
+		}
 		if (!ReadyQueue) {
 			if (TimerQueue) {
 				currentPCB = TimerQueue->pcb;
@@ -233,6 +250,7 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 					TimerQueue->previous = NULL;
 				}
 				free(p);
+				tryingToHandle[USER] = false;
 				Z502Idle();
 				Z502SwitchContext(SWITCH_CONTEXT_KILL_MODE,
 						(void *) &currentPCB->context);
@@ -247,11 +265,22 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 				ReadyQueue->previous = NULL;
 			}
 			free(p);
+			tryingToHandle[USER] = false;
 			Z502SwitchContext(SWITCH_CONTEXT_KILL_MODE,
 					(void *) (&currentPCB->context));
 		}
 		break;
 	default: {
+		tryingToHandle[USER] = true;
+		prioritiveProcess = INTERRUPT;
+		int c = 0;
+		while (tryingToHandle[INTERRUPT] == true && prioritiveProcess == INTERRUPT) {
+			if (c == 0) {
+				printf("blocked by INTERRUPT, wait\n");
+				c = 1;
+			}
+			continue;
+		}
 		INT32 result = removeFromRSQueue(pidToTerminate, &ReadyQueue);
 		if (result != ERR_SUCCESS) {
 			result = removeFromTimerQueue(pidToTerminate);
@@ -260,16 +289,28 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 			numOfProcesses--;
 		}
 		*errCode = result;
+		tryingToHandle[USER] = false;
 		break;
 	}
 	}
 }
 
 void getProcessID(char *process_name, INT32 *process_id, INT32 *errCode) {
+	tryingToHandle[USER] = true;
+	prioritiveProcess = INTERRUPT;
+	int c = 0;
+	while (tryingToHandle[INTERRUPT] == true && prioritiveProcess == INTERRUPT) {
+		if (c == 0) {
+			printf("blocked by INTERRUPT, wait\n");
+			c = 1;
+		}
+		continue;
+	}
 	if (strcmp(process_name, "") == 0
 			|| strcmp(process_name, currentPCB->process_name) == 0) {
 		*process_id = currentPCB->pid;
 		*errCode = ERR_SUCCESS;
+		tryingToHandle[USER] = false;
 		return;
 	}
 
@@ -278,6 +319,7 @@ void getProcessID(char *process_name, INT32 *process_id, INT32 *errCode) {
 		if (strcmp(p->pcb->process_name, process_name) == 0) {
 			*process_id = p->pcb->pid;
 			*errCode = ERR_SUCCESS;
+			tryingToHandle[USER] = false;
 			return;
 		}
 		p = p->next;
@@ -288,11 +330,13 @@ void getProcessID(char *process_name, INT32 *process_id, INT32 *errCode) {
 		if (strcmp(q->pcb->process_name, process_name) == 0) {
 			*process_id = q->pcb->pid;
 			*errCode = ERR_SUCCESS;
+			tryingToHandle[USER] = false;
 			return;
 		}
 		q = q->next;
 	}
 	*errCode = ERR_BAD_PARAM;
+	tryingToHandle[USER] = false;
 	return;
 }
 
@@ -300,6 +344,8 @@ void startTimer(INT32 timeToSet) {
 	INT32 time = timeToSet;
 	if (time <= 5) {
 		time = 0;
+	} else {
+		time -= 5;
 	}
 	CALL(MEM_WRITE(Z502TimerStart, &time));
 }
