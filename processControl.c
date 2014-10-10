@@ -29,6 +29,7 @@ void osCreateProcess(void *starting_address) {
 	p->pid = pidToAssign;
 	strcpy(p->process_name, "osProcess");
 	p->priority = 1000;
+	p->isSuspended = false;
 	pidToAssign++;
 	p->context = (Z502CONTEXT *) next_context;
 	currentPCB = p;
@@ -43,7 +44,8 @@ void createProcess(char *process_name, void *entry, INT32 priority,
 	int c = 0;
 	while (tryingToHandle[INTERRUPT] == true && prioritiveProcess == INTERRUPT) {
 		if (c == 0) {
-			printf("blocked by INTERRUPT, wait\n");
+			printf("createProcess(%s, %p, %d) is blocked by INTERRUPT, wait\n",
+					process_name, entry, priority);
 			c = 1;
 		}
 		continue;
@@ -57,6 +59,7 @@ void createProcess(char *process_name, void *entry, INT32 priority,
 		p->context = (Z502CONTEXT *) next_context;
 		p->pid = pidToAssign;
 		p->priority = priority;
+		p->isSuspended = false;
 		RSQueueNode *node = (RSQueueNode *) calloc(1, sizeof(RSQueueNode));
 		node->pcb = p;
 		node->previous = NULL;
@@ -76,7 +79,8 @@ void sleepProcess(INT32 timeToSleep) {
 	int c = 0;
 	while (tryingToHandle[INTERRUPT] == true && prioritiveProcess == INTERRUPT) {
 		if (c == 0) {
-			printf("blocked by INTERRUPT, wait\n");
+			printf("sleepProcess(%d) is blocked by INTERRUPT, wait\n",
+					timeToSleep);
 			c = 1;
 		}
 		continue;
@@ -98,51 +102,91 @@ void sleepProcess(INT32 timeToSleep) {
 		tryingToHandle[USER] = true;
 		prioritiveProcess = INTERRUPT;
 		int c1 = 0;
-		while (tryingToHandle[INTERRUPT] == true && prioritiveProcess == INTERRUPT) {
+		while (tryingToHandle[INTERRUPT] == true
+				&& prioritiveProcess == INTERRUPT) {
 			if (c1 == 0) {
-				printf("blocked by INTERRUPT, wait\n");
+				printf("sleepProcess(%d) is blocked by INTERRUPT, wait\n",
+						timeToSleep);
 				c1 = 1;
 			}
 			continue;
 		}
-		if (!ReadyQueue && absoluteTime < TimerQueue->time) {
-			tryingToHandle[USER] = false;
-			startTimer(timeToSleep);
-			Z502Idle();
-		} else {
-			TimerQueueNode *node = (TimerQueueNode *) calloc(1,
-					sizeof(TimerQueueNode));
-			node->pcb = currentPCB;
-			node->time = absoluteTime;
-			node->next = NULL;
-			node->previous = NULL;
-			addToTimerQueue(node);
-			if (ReadyQueue) {
-				if (TimerQueue == node) {
-					startTimer(timeToSleep);
-				}
-				currentPCB = ReadyQueue->pcb;
-				RSQueueNode *p = ReadyQueue;
-				ReadyQueue = ReadyQueue->next;
-				if (ReadyQueue) {
-					ReadyQueue->previous = NULL;
-				}
-				free(p);
-				tryingToHandle[USER] = false;
-			} else {
-				currentPCB = TimerQueue->pcb;
-				TimerQueueNode *p = TimerQueue;
-				TimerQueue = TimerQueue->next;
-				if (TimerQueue) {
-					TimerQueue->previous = NULL;
-				}
-				free(p);
-				tryingToHandle[USER] = false;
-				Z502Idle();
+		TimerQueueNode *node = (TimerQueueNode *) calloc(1,
+				sizeof(TimerQueueNode));
+		node->pcb = currentPCB;
+		node->time = absoluteTime;
+		node->next = NULL;
+		node->previous = NULL;
+		addToTimerQueue(node);
+		if (ReadyQueue) {
+			if (TimerQueue == node) {
+				startTimer(timeToSleep);
 			}
-			Z502SwitchContext(SWITCH_CONTEXT_SAVE_MODE,
-					(void *) (&currentPCB->context));
+			currentPCB = ReadyQueue->pcb;
+			RSQueueNode *p = ReadyQueue;
+			ReadyQueue = ReadyQueue->next;
+			if (ReadyQueue) {
+				ReadyQueue->previous = NULL;
+			}
+			free(p);
+			tryingToHandle[USER] = false;
+		} else {
+			TimerQueueNode *p = TimerQueue;
+			if (p->pcb->isSuspended == true) {
+				while (p != node) {
+					if (p->pcb == false) {
+						break;
+					}
+					p = p->next;
+				}
+				startTimer(p->time - startTime);
+			}
+			removeFromTimerQueue(p->pcb->pid, &p);
+			currentPCB = p->pcb;
+			free(p);
+			tryingToHandle[USER] = false;
+			Z502Idle();
 		}
+		Z502SwitchContext(SWITCH_CONTEXT_SAVE_MODE,
+				(void *) (&currentPCB->context));
+//		if (!ReadyQueue && absoluteTime < TimerQueue->time) {
+//			tryingToHandle[USER] = false;
+//			startTimer(timeToSleep);
+//			Z502Idle();
+//		} else {
+//			TimerQueueNode *node = (TimerQueueNode *) calloc(1,
+//					sizeof(TimerQueueNode));
+//			node->pcb = currentPCB;
+//			node->time = absoluteTime;
+//			node->next = NULL;
+//			node->previous = NULL;
+//			addToTimerQueue(node);
+//			if (ReadyQueue) {
+//				if (TimerQueue == node) {
+//					startTimer(timeToSleep);
+//				}
+//				currentPCB = ReadyQueue->pcb;
+//				RSQueueNode *p = ReadyQueue;
+//				ReadyQueue = ReadyQueue->next;
+//				if (ReadyQueue) {
+//					ReadyQueue->previous = NULL;
+//				}
+//				free(p);
+//				tryingToHandle[USER] = false;
+//			} else {
+//				currentPCB = TimerQueue->pcb;
+//				TimerQueueNode *p = TimerQueue;
+//				TimerQueue = TimerQueue->next;
+//				if (TimerQueue) {
+//					TimerQueue->previous = NULL;
+//				}
+//				free(p);
+//				tryingToHandle[USER] = false;
+//				Z502Idle();
+//			}
+//			Z502SwitchContext(SWITCH_CONTEXT_SAVE_MODE,
+//					(void *) (&currentPCB->context));
+//		}
 	}
 }
 
@@ -171,7 +215,11 @@ void wakeUpProcesses() {
 		node->pcb = p;
 		node->next = NULL;
 		node->previous = NULL;
-		addToRSQueue(node, &ReadyQueue);
+		if (p->isSuspended == false) {
+			addToRSQueue(node, &ReadyQueue);
+		} else {
+			addToRSQueue(node, &SuspendQueue);
+		}
 		pT2 = pT1;
 		pT1 = pT1->next;
 		free(pT2);
@@ -182,38 +230,70 @@ void wakeUpProcesses() {
 	}
 }
 
-//void suspendProcess(INT32 pid, INT32 *errCode) {
-//	if (pid == -1 || pid == currentPCB->pid) {
-//		//pid = currentPCB->pid;
-//		RSQueueNode *p = (RSQueueNode *) calloc(1, sizeof(RSQueueNode));
-//		p->pcb = currentPCB;
-//		p->next = NULL;
-//		addToSuspendQueue(p);
-//		if (ReadyQueue) {
-//			currentPCB = ReadyQueue->pcb;
-//			RSQueueNode *q = ReadyQueue;
-//			ReadyQueue = ReadyQueue->next;
-//			free(q);
-//		} else {
-//			currentPCB = TimerQueue->pcb;
-//			TimerQueueNode *q = TimerQueue;
-//			TimerQueue = TimerQueue->next;
-//			free(q);
-//			Z502Idle();
-//		}
-//		*errCode = ERR_SUCCESS;
-//		Z502SwitchContext(SWITCH_CONTEXT_SAVE_MODE,
-//				(void *) (&currentPCB->context));
-//	} else {
-//		RSQueueNode *p = searchInRSQueue(pid);
-//		if (!p) {
-//			*errCode = ERR_SUCCESS;
-//		}
-//	}
-//}
+void suspendProcess(INT32 pid, INT32 *errCode) {
+	tryingToHandle[USER] = 1;
+	prioritiveProcess = INTERRUPT;
+	int c = 0;
+	while (tryingToHandle[INTERRUPT] == true && prioritiveProcess == INTERRUPT) {
+		if (c == 0) {
+			printf("suspendProcess(%d) is blocked by INTEERUPT, wait\n", pid);
+			c = 1;
+		}
+		continue;
+	}
+	INT32 result;
+	if (pid == -1 || pid == currentPCB->pid) {
+
+	} else {
+		RSQueueNode *p = NULL;
+		removeFromRSQueue(pid, &ReadyQueue, &p, &result);
+		if (!p) {
+			TimerQueueNode *q = searchInTimerQueue(pid);
+			if (q) {
+				q->pcb->isSuspended = true;
+			} else {
+				result = ERR_BAD_PARAM;
+			}
+		} else {
+			p->pcb->isSuspended = true;
+			addToRSQueue(p, &SuspendQueue);
+		}
+		tryingToHandle[USER] = false;
+		*errCode = result;
+		return;
+	}
+}
 
 void resumeProcess(INT32 pid, INT32 *errCode) {
-
+	tryingToHandle[USER] = true;
+	prioritiveProcess = INTERRUPT;
+	int c = 0;
+	while (tryingToHandle[INTERRUPT == true && prioritiveProcess == INTERRUPT]) {
+		if (c == 0) {
+			printf("resumeProcess(%d) is blocked by INTEERUPT, wait\n", pid);
+			c = 1;
+		}
+		continue;
+	}
+	RSQueueNode *p = NULL;
+	INT32 result;
+	removeFromRSQueue(pid, &SuspendQueue, &p, &result);
+	if (!p) {
+		TimerQueueNode *q = searchInTimerQueue(pid);
+		if (q && q->pcb->isSuspended == true) {
+			result = ERR_SUCCESS;
+			q->pcb->isSuspended = false;
+		} else {
+			result = ERR_BAD_PARAM;
+		}
+	} else {
+		result = ERR_SUCCESS;
+		p->pcb->isSuspended = false;
+		addToRSQueue(p, &ReadyQueue);
+	}
+	tryingToHandle[USER] = false;
+	*errCode = result;
+	return;
 }
 
 void terminateProcess(INT32 pid, INT32 *errCode) {
@@ -234,23 +314,37 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 		tryingToHandle[USER] = true;
 		prioritiveProcess = INTERRUPT;
 		int c = 0;
-		while (tryingToHandle[INTERRUPT] == true && prioritiveProcess == INTERRUPT) {
+		while (tryingToHandle[INTERRUPT] == true
+				&& prioritiveProcess == INTERRUPT) {
 			if (c == 0) {
-				printf("blocked by INTERRUPT, wait\n");
+				printf("terminateProcess(%d) is blocked by INTERRUPT, wait\n",
+						pid);
 				c = 1;
 			}
 			continue;
 		}
 		if (!ReadyQueue) {
 			if (TimerQueue) {
-				currentPCB = TimerQueue->pcb;
 				TimerQueueNode *p = TimerQueue;
-				TimerQueue = TimerQueue->next;
-				if (TimerQueue) {
-					TimerQueue->previous = NULL;
+				if (p->pcb->isSuspended == true) {
+					while (p) {
+						if (p->pcb->isSuspended == false) {
+							break;
+						}
+						p = p->next;
+					}
+					INT32 startTime;
+					CALL(MEM_READ(Z502ClockStatus, &startTime));
+					startTimer(p->time - startTime);
 				}
-				free(p);
-				tryingToHandle[USER] = false;
+				if (p) {
+					removeFromTimerQueue(p->pcb->pid, &p);
+					currentPCB = p->pcb;
+					free(p);
+					tryingToHandle[USER] = false;
+				} else {
+					Z502Halt();
+				}
 				Z502Idle();
 				Z502SwitchContext(SWITCH_CONTEXT_KILL_MODE,
 						(void *) &currentPCB->context);
@@ -274,16 +368,30 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 		tryingToHandle[USER] = true;
 		prioritiveProcess = INTERRUPT;
 		int c = 0;
-		while (tryingToHandle[INTERRUPT] == true && prioritiveProcess == INTERRUPT) {
+		while (tryingToHandle[INTERRUPT] == true
+				&& prioritiveProcess == INTERRUPT) {
 			if (c == 0) {
-				printf("blocked by INTERRUPT, wait\n");
+				printf("terminateProcess(%d) is blocked by INTERRUPT, wait\n",
+						pid);
 				c = 1;
 			}
 			continue;
 		}
-		INT32 result = removeFromRSQueue(pidToTerminate, &ReadyQueue);
-		if (result != ERR_SUCCESS) {
-			result = removeFromTimerQueue(pidToTerminate);
+		RSQueueNode *p = NULL;
+		INT32 result;
+		removeFromRSQueue(pidToTerminate, &ReadyQueue, &p);
+		if (!p) {
+			TimerQueueNode *q = NULL;
+			removeFromTimerQueue(pidToTerminate, &q);
+			if (!q) {
+				result = ERR_BAD_PARAM;
+			} else {
+				result = ERR_SUCCESS;
+				free(q);
+			}
+		} else {
+			result = ERR_SUCCESS;
+			free(p);
 		}
 		if (result == ERR_SUCCESS) {
 			numOfProcesses--;
@@ -301,7 +409,8 @@ void getProcessID(char *process_name, INT32 *process_id, INT32 *errCode) {
 	int c = 0;
 	while (tryingToHandle[INTERRUPT] == true && prioritiveProcess == INTERRUPT) {
 		if (c == 0) {
-			printf("blocked by INTERRUPT, wait\n");
+			printf("getProcessID(%s) is blocked by INTERRUPT, wait\n",
+					process_name);
 			c = 1;
 		}
 		continue;
@@ -393,24 +502,26 @@ TimerQueueNode *searchInTimerQueue(INT32 pid) {
 	return NULL;
 }
 
-INT32 removeFromTimerQueue(INT32 pid) {
-	TimerQueueNode *p = searchInTimerQueue(pid);
-	if (!p) {
-		return ERR_BAD_PARAM;
+void removeFromTimerQueue(INT32 pid, TimerQueueNode **p) {
+	*p = searchInTimerQueue(pid);
+	if (!(*p)) {
+		return;
 	} else {
-		if (p == TimerQueue) {
-			TimerQueue = p->next;
+		if ((*p) == TimerQueue) {
+			TimerQueue = (*p)->next;
 			if (TimerQueue) {
 				TimerQueue->previous = NULL;
 			}
 		} else {
-			p->previous->next = p->next;
-			if (p->next) {
-				p->next->previous = p->previous;
+			(*p)->previous->next = (*p)->next;
+			if ((*p)->next) {
+				(*p)->next->previous = (*p)->previous;
 			}
 		}
-		free(p);
-		return ERR_SUCCESS;
+		(*p)->previous = NULL;
+		(*p)->next = NULL;
+		//free(p);
+		return;
 	}
 }
 
@@ -489,23 +600,25 @@ RSQueueNode *searchInRSQueue(INT32 pid, RSQueueNode *queueHead) {
 	return NULL;
 }
 
-INT32 removeFromRSQueue(INT32 pid, RSQueueNode **queueHead) {
-	RSQueueNode *p = searchInRSQueue(pid, *queueHead);
-	if (!p) {
-		return ERR_BAD_PARAM;
+void removeFromRSQueue(INT32 pid, RSQueueNode **queueHead, RSQueueNode **p) {
+	*p = searchInRSQueue(pid, *queueHead);
+	if (!(*p)) {
+		return;
 	} else {
-		if (p == *queueHead) {
-			*queueHead = p->next;
+		if (*p == *queueHead) {
+			*queueHead = (*p)->next;
 			if (*queueHead) {
 				(*queueHead)->previous = NULL;
 			}
 		} else {
-			p->previous->next = p->next;
-			if (p->next) {
-				p->next->previous = p->previous;
+			(*p)->previous->next = (*p)->next;
+			if ((*p)->next) {
+				(*p)->next->previous = (*p)->previous;
 			}
 		}
-		free(p);
-		return ERR_SUCCESS;
+		(*p)->previous = NULL;
+		(*p)->next = NULL;
+		//free(p);
+		return;
 	}
 }

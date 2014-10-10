@@ -155,8 +155,8 @@ void svc(SYSTEM_CALL_DATA *SystemCallData) {
 		break;
 //	Call to suspend a process
 	case SYSNUM_SUSPEND_PROCESS:
-//		suspendProcess((INT32) SystemCallData->Argument[0],
-//				(INT32 *) SystemCallData->Argument[1]);
+		suspendProcess((INT32) SystemCallData->Argument[0],
+				(INT32 *) SystemCallData->Argument[1]);
 		break;
 //	Call to resume a process
 	case SYSNUM_RESUME_PROCESS:

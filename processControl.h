@@ -23,6 +23,7 @@ typedef struct {
 	INT32 pid;
 	char process_name[16];
 	INT32 priority;
+	bool isSuspended;
 	Z502CONTEXT *context;
 } PCB;
 
@@ -71,7 +72,7 @@ extern void addToTimerQueue();
 
 extern TimerQueueNode *searchInTimerQueue();
 
-extern INT32 removeFromTimerQueue();
+extern void removeFromTimerQueue();
 
 extern INT32 checkProcessParams();
 
@@ -79,5 +80,5 @@ extern void addToRSQueue();
 
 extern RSQueueNode *searchInRSQueue();
 
-extern INT32 removeFromRSQueue();
+extern void removeFromRSQueue();
 

@@ -446,16 +446,16 @@ void test1f(void) {
         // scheduling behavior where the processes are yanked out of the
         // ready and the waiting states, and placed into the suspended state.
 
-//        SUSPEND_PROCESS(Z502_REG3, &Z502_REG9);
-//        SUSPEND_PROCESS(Z502_REG5, &Z502_REG9);
-//        SUSPEND_PROCESS(Z502_REG7, &Z502_REG9);
+        SUSPEND_PROCESS(Z502_REG3, &Z502_REG9);
+        SUSPEND_PROCESS(Z502_REG5, &Z502_REG9);
+        SUSPEND_PROCESS(Z502_REG7, &Z502_REG9);
 
         // Sleep so we can watch the scheduling action
         SLEEP(sleep_time);
 
-//        RESUME_PROCESS(Z502_REG3, &Z502_REG9);
-//        RESUME_PROCESS(Z502_REG5, &Z502_REG9);
-//        RESUME_PROCESS(Z502_REG7, &Z502_REG9);
+        RESUME_PROCESS(Z502_REG3, &Z502_REG9);
+        RESUME_PROCESS(Z502_REG5, &Z502_REG9);
+        RESUME_PROCESS(Z502_REG7, &Z502_REG9);
     }
 
     //   Wait for children to finish, then quit
