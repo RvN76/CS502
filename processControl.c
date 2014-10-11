@@ -22,13 +22,15 @@ RSQueueNode *SuspendQueue = NULL;
 INT32 prioritiveProcess = -1;
 bool tryingToHandle[2] = { false, false };
 
+bool timerActive = false;
+
 void osCreateProcess(void *starting_address) {
 	void *next_context;
 	Z502MakeContext(&next_context, starting_address, USER_MODE);
 	PCB *p = (PCB *) calloc(1, sizeof(PCB));
 	p->pid = pidToAssign;
 	strcpy(p->process_name, "osProcess");
-	p->priority = 1000;
+	p->priority = 1;
 	p->isSuspended = false;
 	pidToAssign++;
 	p->context = (Z502CONTEXT *) next_context;
@@ -88,9 +90,12 @@ void sleepProcess(INT32 timeToSleep) {
 	if (!ReadyQueue && !TimerQueue) {
 		tryingToHandle[USER] = false;
 		startTimer(timeToSleep);
+		printf("reset by user: timer now added: %d\n", timeToSleep);
+		timerActive = true;
 		Z502Idle();
+		timerActive = false;
 	} else {
-		tryingToHandle[USER] = false;
+		//tryingToHandle[USER] = false;
 		if (timeToSleep <= 6) {
 			timeToSleep = 0;
 		} else {
@@ -118,10 +123,12 @@ void sleepProcess(INT32 timeToSleep) {
 		node->next = NULL;
 		node->previous = NULL;
 		addToTimerQueue(node);
+		if (TimerQueue == node) {
+			startTimer(timeToSleep);
+			printf("reset by user: timer now to %d\n", node->time);
+			timerActive = true;
+		}
 		if (ReadyQueue) {
-			if (TimerQueue == node) {
-				startTimer(timeToSleep);
-			}
 			currentPCB = ReadyQueue->pcb;
 			RSQueueNode *p = ReadyQueue;
 			ReadyQueue = ReadyQueue->next;
@@ -134,64 +141,38 @@ void sleepProcess(INT32 timeToSleep) {
 			TimerQueueNode *p = TimerQueue;
 			if (p->pcb->isSuspended == true) {
 				while (p != node) {
-					if (p->pcb == false) {
+					if (p->pcb->isSuspended == false) {
 						break;
 					}
 					p = p->next;
 				}
-				startTimer(p->time - startTime);
 			}
-			removeFromTimerQueue(p->pcb->pid, &p);
+			if (!timerActive || p != TimerQueue) {
+				if (!timerActive) {
+					printf("timer activated by user (sleep)\n");
+				}
+				startTimer(p->time - startTime);
+				printf("reset by user: timer now to %d\n", p->time);
+				timerActive = true;
+			}
 			currentPCB = p->pcb;
+			removeFromTimerQueue(p->pcb->pid, &p);
 			free(p);
 			tryingToHandle[USER] = false;
 			Z502Idle();
+			timerActive = false;
 		}
 		Z502SwitchContext(SWITCH_CONTEXT_SAVE_MODE,
 				(void *) (&currentPCB->context));
-//		if (!ReadyQueue && absoluteTime < TimerQueue->time) {
-//			tryingToHandle[USER] = false;
-//			startTimer(timeToSleep);
-//			Z502Idle();
-//		} else {
-//			TimerQueueNode *node = (TimerQueueNode *) calloc(1,
-//					sizeof(TimerQueueNode));
-//			node->pcb = currentPCB;
-//			node->time = absoluteTime;
-//			node->next = NULL;
-//			node->previous = NULL;
-//			addToTimerQueue(node);
-//			if (ReadyQueue) {
-//				if (TimerQueue == node) {
-//					startTimer(timeToSleep);
-//				}
-//				currentPCB = ReadyQueue->pcb;
-//				RSQueueNode *p = ReadyQueue;
-//				ReadyQueue = ReadyQueue->next;
-//				if (ReadyQueue) {
-//					ReadyQueue->previous = NULL;
-//				}
-//				free(p);
-//				tryingToHandle[USER] = false;
-//			} else {
-//				currentPCB = TimerQueue->pcb;
-//				TimerQueueNode *p = TimerQueue;
-//				TimerQueue = TimerQueue->next;
-//				if (TimerQueue) {
-//					TimerQueue->previous = NULL;
-//				}
-//				free(p);
-//				tryingToHandle[USER] = false;
-//				Z502Idle();
-//			}
-//			Z502SwitchContext(SWITCH_CONTEXT_SAVE_MODE,
-//					(void *) (&currentPCB->context));
-//		}
 	}
 }
 
 void wakeUpProcesses() {
+	if (timerActive) {
+		timerActive = false;
+	}
 	if (!TimerQueue) {
+//		printf("nothing left\n");
 		return;
 	}
 	INT32 currentTime;
@@ -205,6 +186,8 @@ void wakeUpProcesses() {
 	}
 	if (pT) {
 		startTimer(pT->time - currentTime);
+		timerActive = true;
+		printf("reset by interrupt: timer now to %d\n", pT->time);
 	}
 
 	TimerQueueNode *pT1 = TimerQueue, *pT2;
@@ -224,7 +207,7 @@ void wakeUpProcesses() {
 		pT1 = pT1->next;
 		free(pT2);
 	}
-	TimerQueue = pT1;
+	TimerQueue = pT;
 	if (TimerQueue) {
 		TimerQueue->previous = NULL;
 	}
@@ -246,7 +229,7 @@ void suspendProcess(INT32 pid, INT32 *errCode) {
 
 	} else {
 		RSQueueNode *p = NULL;
-		removeFromRSQueue(pid, &ReadyQueue, &p, &result);
+		removeFromRSQueue(pid, &ReadyQueue, &p);
 		if (!p) {
 			TimerQueueNode *q = searchInTimerQueue(pid);
 			if (q) {
@@ -277,7 +260,7 @@ void resumeProcess(INT32 pid, INT32 *errCode) {
 	}
 	RSQueueNode *p = NULL;
 	INT32 result;
-	removeFromRSQueue(pid, &SuspendQueue, &p, &result);
+	removeFromRSQueue(pid, &SuspendQueue, &p);
 	if (!p) {
 		TimerQueueNode *q = searchInTimerQueue(pid);
 		if (q && q->pcb->isSuspended == true) {
@@ -333,26 +316,37 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 						}
 						p = p->next;
 					}
-					INT32 startTime;
-					CALL(MEM_READ(Z502ClockStatus, &startTime));
-					startTimer(p->time - startTime);
 				}
 				if (p) {
-					removeFromTimerQueue(p->pcb->pid, &p);
 					currentPCB = p->pcb;
+					printf("t: Pid now to %d\n", currentPCB->pid);
+					if (!timerActive || p != TimerQueue) {
+						if (!timerActive) {
+							printf("timer activated by user (terminate)\n");
+						}
+						INT32 startTime;
+						CALL(MEM_READ(Z502ClockStatus, &startTime));
+						startTimer(p->time - startTime);
+						timerActive = true;
+						printf("reset by user: timer now to %d\n", p->time);
+					}
+					removeFromTimerQueue(p->pcb->pid, &p);
 					free(p);
 					tryingToHandle[USER] = false;
 				} else {
 					Z502Halt();
 				}
 				Z502Idle();
+				timerActive = false;
 				Z502SwitchContext(SWITCH_CONTEXT_KILL_MODE,
 						(void *) &currentPCB->context);
 			} else {
+				printf("no timer queue\n");
 				Z502Halt();
 			}
 		} else {
 			currentPCB = ReadyQueue->pcb;
+			printf("r: Pid now to %d\n", currentPCB->pid);
 			RSQueueNode *p = ReadyQueue;
 			ReadyQueue = ReadyQueue->next;
 			if (ReadyQueue) {
@@ -484,6 +478,12 @@ void addToTimerQueue(TimerQueueNode *node) {
 		p->next->previous = node;
 	}
 	p->next = node;
+	p = TimerQueue;
+	printf("pid %d added to TimerQueue\n", node->pcb->pid);
+//	while (p) {
+//		printf("pid = %d, time = %d\n", p->pcb->pid, p->time);
+//		p = p->next;
+//	}
 	return;
 }
 
@@ -564,7 +564,7 @@ void addToRSQueue(RSQueueNode *node, RSQueueNode **queueHead) {
 		*queueHead = node;
 		return;
 	}
-	if ((*queueHead)->pcb->priority < node->pcb->priority) {
+	if ((*queueHead)->pcb->priority > node->pcb->priority) {
 		node->next = *queueHead;
 		(*queueHead)->previous = node;
 		*queueHead = node;
@@ -572,7 +572,7 @@ void addToRSQueue(RSQueueNode *node, RSQueueNode **queueHead) {
 	}
 	RSQueueNode *p = *queueHead;
 	while (p->next) {
-		if (p->next->pcb->priority < node->pcb->priority) {
+		if (p->next->pcb->priority > node->pcb->priority) {
 			break;
 		}
 		p = p->next;
