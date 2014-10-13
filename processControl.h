@@ -50,6 +50,8 @@ extern RSQueueNode *SuspendQueue;
 extern INT32 prioritiveProcess;
 extern bool tryingToHandle[2];
 
+extern char operation[64];
+
 extern void osCreateProcess();
 
 extern void createProcess();
@@ -60,7 +62,7 @@ extern void getProcessID();
 
 extern void sleepProcess();
 
-extern void wakeUpProcesses();
+extern void wakeUpProcesses(bool, INT32 *);
 
 extern void suspendProcess();
 
@@ -82,3 +84,6 @@ extern RSQueueNode *searchInRSQueue();
 
 extern void removeFromRSQueue();
 
+extern void getLock(char *, INT32);
+
+extern void releaseLock(INT32);

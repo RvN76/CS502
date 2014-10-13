@@ -1002,7 +1002,6 @@ void HardwareTimer(INT32 time_to_delay) {
             TIMER_INTERRUPT, (INT16) ERR_SUCCESS, &timer_state.event_ptr);
     timer_state.timer_in_use = TRUE;
     ChargeTimeAndCheckEvents(COST_OF_TIMER);
-
 }                                       // End of HardwareTimer  
 
 /*****************************************************************
@@ -1266,8 +1265,8 @@ void Z502SwitchContext(BOOL kill_or_save, void **IncomingContextPointer) {
     // ourselves which will cause us to hang -- it does so on LINUX.
     // BUT make sure that the suspend is the last instruction in this routine
     //    and we don't do any work after it.
-    //printf("Z502Switch... curr = %lX, Incoming = %lX\n",
-    //       (unsigned long)curr_ptr, (unsigned long)*context_ptr);
+    //  printf("Z502Switch... curr = %lX, Incoming = %lX\n",
+    //         (unsigned long)curr_ptr, (unsigned long)*context_ptr);
     if (curr_ptr == *context_ptr) {
         ReleaseLock(HardwareLock, "Z502SwitchContext");
         //      printf("Z502Switch... - returning with no switch\n");
@@ -1895,7 +1894,7 @@ void PrintHardwareStats(void) {
         printf("Faults = %5d:  ", HardwareStats.number_faults);
     if (HardwareStats.context_switches > 0)
         printf("Context Switches = %5d:  ", HardwareStats.context_switches);
-    printf("CALLS = %5d\n", HardwareStats.number_charge_times);
+    printf("CALLS = %5d\n  ", HardwareStats.number_charge_times);
 
 }               // End of PrintHardwareStats   
 /*****************************************************************

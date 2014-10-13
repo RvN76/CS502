@@ -1142,8 +1142,8 @@ void test1x(void) {
         RandomSleep = (RandomSleep * Z502_REG3) % 143;
         SLEEP(RandomSleep);
         GET_TIME_OF_DAY(&Z502_REG4);
-//        printf("Test1X: Pid = %d, Sleep Time = %ld, Latency Time = %d\n",
-//                (int) Z502_REG2, RandomSleep, (int) (Z502_REG4 - Z502_REG3));
+        printf("Test1X: Pid = %d, Sleep Time = %ld, Latency Time = %d\n",
+                (int) Z502_REG2, RandomSleep, (int) (Z502_REG4 - Z502_REG3));
     }
     printf("Test1x, PID %ld, Ends at Time %ld\n", Z502_REG2, Z502_REG4);
 
