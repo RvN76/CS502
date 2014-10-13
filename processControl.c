@@ -103,9 +103,7 @@ void sleepProcess(INT32 timeToSleep) {
 		releaseLock(USER);
 		startTimer(timeToSleep);
 		printf("reset by user: timer now added: %d\n", timeToSleep);
-//		timerActive = true;
 		Z502Idle();
-//		timerActive = false;
 	} else {
 		if (timeToSleep <= 6) {
 			timeToSleep = 0;
@@ -126,7 +124,6 @@ void sleepProcess(INT32 timeToSleep) {
 			startTimer(timeToSleep);
 			printf("reset by user (sleep): timer now to %d, pid = %d\n",
 					node->time, node->pcb->pid);
-//			timerActive = true;
 		}
 		if (ReadyQueue) {
 			currentPCB = ReadyQueue->pcb;
@@ -137,7 +134,7 @@ void sleepProcess(INT32 timeToSleep) {
 			}
 			free(p);
 			printf("sr: Pid now to %d\n", currentPCB->pid);
-
+			releaseLock(USER);
 //			tryingToHandle[USER] = false;
 		} else {
 			TimerQueueNode *p = TimerQueue;
@@ -159,17 +156,19 @@ void sleepProcess(INT32 timeToSleep) {
 			free(p);
 //			tryingToHandle[USER] = false;
 			printf("st: Pid now to %d\n", currentPCB->pid);
-//			interruptFinished = false;
-			Z502Idle();
+			interruptFinished = false;
 			printf("sleep waiting for interrupt\n");
-			wakeUpProcesses(true, &startTime);
+			releaseLock(USER);
+			Z502Idle();
+			while (!interruptFinished)
+				;
 			printf("waiting finished\n");
 //			tryingToHandle[USER] = false;
 //			releaseLock(USER);
 //			timerActive = false;
 		}
 //		interruptFinished = false;
-		releaseLock(USER);
+
 		Z502SwitchContext(SWITCH_CONTEXT_SAVE_MODE,
 				(void *) (&currentPCB->context));
 	}
@@ -228,7 +227,7 @@ void wakeUpProcesses(bool currentTimeAcquired, INT32 *time) {
 		TimerQueue->previous = NULL;
 	}
 //	interruptFinished = true;
-	printf("interrupt finished\n");
+//	printf("interrupt finished\n");
 }
 
 void suspendProcess(INT32 pid, INT32 *errCode) {
@@ -341,6 +340,7 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 				ReadyQueue->previous = NULL;
 			}
 			free(p);
+			releaseLock(USER);
 		} else {
 			if (TimerQueue) {
 				TimerQueueNode *p = TimerQueue;
@@ -367,18 +367,19 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 				} else {
 					Z502Halt();
 				}
-//				interruptFinished = false;
-				Z502Idle();
+				interruptFinished = false;
+				releaseLock(USER);
 				printf("terminate waiting for interrupt\n");
-				wakeUpProcesses(false, NULL);
+				Z502Idle();
+//				wakeUpProcesses(false, NULL);
 //				tryingToHandle[USER] = false;
+				while (!interruptFinished)
+					;
 				printf("waiting finished\n");
 			} else {
 				Z502Halt();
 			}
 		}
-		releaseLock(USER);
-		printf("Switching to %d\n", currentPCB->pid);
 		Z502SwitchContext(SWITCH_CONTEXT_KILL_MODE,
 				(void *) (&currentPCB->context));
 		break;
@@ -482,16 +483,16 @@ void startTimer(INT32 timeToSet) {
 //	} else {
 //		time -= 5;
 //	}
-	printf("timeToSet = %d\n", time);
-	INT32 Status;
+//	printf("timeToSet = %d\n", time);
+//	INT32 Status;
 	CALL(MEM_WRITE(Z502TimerStart, &time));
-	CALL(MEM_READ(Z502TimerStatus, &Status));
-	while (Status != 6) {
-		printf("setting time failed\n");
-		CALL(MEM_WRITE(Z502TimerStart, &time));
-		CALL(MEM_READ(Z502TimerStatus, &Status));
-	}
-	printf("status = %d\n", Status);
+//	CALL(MEM_READ(Z502TimerStatus, &Status));
+//	while (Status != 6) {
+//		printf("setting time failed\n");
+//		CALL(MEM_WRITE(Z502TimerStart, &time));
+//		CALL(MEM_READ(Z502TimerStatus, &Status));
+//	}
+//	printf("status = %d\n", Status);
 }
 
 void addToTimerQueue(TimerQueueNode *node) {

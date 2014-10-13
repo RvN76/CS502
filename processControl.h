@@ -50,6 +50,8 @@ extern RSQueueNode *SuspendQueue;
 extern INT32 prioritiveProcess;
 extern bool tryingToHandle[2];
 
+extern bool interruptFinished;
+
 extern char operation[64];
 
 extern void osCreateProcess();

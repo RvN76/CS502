@@ -23,6 +23,7 @@ void timerInterrupt() {
 //		continue;
 //	}
 	wakeUpProcesses(false, NULL);
+	interruptFinished = true;
 	releaseLock(INTERRUPT);
 //	tryingToHandle[INTERRUPT] = false;
 }
