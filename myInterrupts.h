@@ -8,6 +8,6 @@
 #ifndef MYINTERRUPTS_H_
 #define MYINTERRUPTS_H_
 
-#endif /* MYINTERRUPTS_H_ */
+void timerInterrupt();
 
-extern void timerInterrupt();
+#endif /* MYINTERRUPTS_H_ */

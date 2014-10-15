@@ -24,7 +24,7 @@
 
 #include       		"global.h"
 #include            "syscalls.h"
-#include			"processControl.h"
+#include			"mySVC.h"
 #include			"myInterrupts.h"
 #include            "protos.h"
 #include            "string.h"
