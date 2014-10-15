@@ -169,10 +169,33 @@ void svc(SYSTEM_CALL_DATA *SystemCallData) {
 				(INT32 *) SystemCallData->Argument[1],
 				(INT32 *) SystemCallData->Argument[2]);
 		break;
+//	Call to change the priority
+	case SYSNUM_CHANGE_PRIORITY:
+		changePriority((INT32) SystemCallData->Argument[0],
+				(INT32) SystemCallData->Argument[1],
+				(INT32 *) SystemCallData->Argument[2]);
+		break;
+//	Call to send a message
+	case SYSNUM_SEND_MESSAGE:
+		sendMessage((INT32) SystemCallData->Argument[0],
+				(char *) SystemCallData->Argument[1],
+				(INT32) SystemCallData->Argument[2],
+				(INT32 *) SystemCallData->Argument[3]);
+		break;
+//	Call to receive a message
+	case SYSNUM_RECEIVE_MESSAGE:
+		receiveMessage((INT32) SystemCallData->Argument[0],
+				(char *) SystemCallData->Argument[1],
+				(INT32) SystemCallData->Argument[2],
+				(INT32 *) SystemCallData->Argument[3],
+				(INT32 *) SystemCallData->Argument[4],
+				(INT32 *) SystemCallData->Argument[5]);
+		break;
 //	other cases: report
 	default:
 		printf("ERROR! Can't recognize call_type\n");
 		printf("call_type is : %i", call_type);
+		break;
 	}
 }                                               // End of svc
 
@@ -244,6 +267,21 @@ void osInit(int argc, char *argv[]) {
 			testToRun = (void *) test1f;
 		}
 
+		if (strcmp(argv[1], "test1g") == 0) {
+			testToRun = (void *) test1g;
+		}
+
+		if (strcmp(argv[1], "test1h") == 0) {
+			testToRun = (void *) test1h;
+		}
+
+		if (strcmp(argv[1], "test1i") == 0) {
+			testToRun = (void *) test1i;
+		}
+
+		if (strcmp(argv[1], "test1j") == 0) {
+			testToRun = (void *) test1j;
+		}
 	}
 
 	if (testToRun) {

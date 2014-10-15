@@ -653,6 +653,7 @@ void test1i(void) {
     // Get OUR PID
     GET_PROCESS_ID("", &Z502_REG2, &Z502_REG9);
     printf("Release %s:Test 1i: Pid %ld\n", CURRENT_REL, Z502_REG2);
+    fflush(stdout);
 
     // Make our priority high 
     CHANGE_PRIORITY(-1, MOST_FAVORABLE_PRIORITY, &Z502_REG9);
