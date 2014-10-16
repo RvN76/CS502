@@ -282,6 +282,14 @@ void osInit(int argc, char *argv[]) {
 		if (strcmp(argv[1], "test1j") == 0) {
 			testToRun = (void *) test1j;
 		}
+
+		if (strcmp(argv[1], "test1k") == 0) {
+			testToRun = (void *) test1k;
+		}
+
+		if (strcmp(argv[1], "test1l") == 0) {
+			testToRun = (void *) test1l;
+		}
 	}
 
 	if (testToRun) {

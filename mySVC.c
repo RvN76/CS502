@@ -163,7 +163,7 @@ void wakeUpProcesses(bool currentTimeAcquired, INT32 *time) {
 
 void suspendProcess(INT32 pid, INT32 *errCode) {
 	sprintf(operation, "suspendProcess(%d)", pid);
-	INT32 result;
+//	INT32 result;
 	if (pid == -1 || pid == currentPCB->pid) {
 		*errCode = ERR_SUCCESS;
 		getLock("INTERRUPT", USER);
@@ -181,18 +181,24 @@ void suspendProcess(INT32 pid, INT32 *errCode) {
 		RSQueueNode *p = NULL;
 		removeFromRSQueue(pid, &ReadyQueue, &p);
 		if (!p) {
-			TimerQueueNode *q = searchInTimerQueue(pid);
-			if (q) {
-				q->pcb->isSuspended = true;
-			} else {
-				result = ERR_BAD_PARAM;
+			removeFromRSQueue(pid, &MessageSuspendQueue, &p);
+			if (!p) {
+				TimerQueueNode *q = searchInTimerQueue(pid);
+				if (q) {
+					q->pcb->isSuspended = true;
+				} else {
+					releaseLock(USER);
+					*errCode = ERR_BAD_PARAM;
+					return;
+				}
 			}
-		} else {
+		}
+		if (p) {
 			p->pcb->isSuspended = true;
 			addToSuspendQueue(p, &SuspendQueue);
 		}
 		releaseLock(USER);
-		*errCode = result;
+		*errCode = ERR_SUCCESS;
 		return;
 	}
 }
@@ -235,10 +241,11 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 		Z502Halt();
 		break;
 	case -1:
-		killPid(currentPCB->pid);
 		*errCode = ERR_SUCCESS;
 		numOfProcesses--;
 		getLock("INTERRUPT", USER);
+		killPid(currentPCB->pid);
+		removeMessageBox(currentPCB->pid);
 		dispatch("Terminate", -1);
 		Z502SwitchContext(SWITCH_CONTEXT_KILL_MODE,
 				(void *) (&currentPCB->context));
@@ -263,6 +270,7 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 		}
 		if (result == ERR_SUCCESS) {
 			killPid(pidToTerminate);
+			removeMessageBox(pidToTerminate);
 			numOfProcesses--;
 		}
 		releaseLock(USER);
@@ -406,6 +414,7 @@ void sendMessage(INT32 receiver, char *message, INT32 sendLength,
 		*errCode = ERR_BAD_PARAM;
 		return;
 	}
+	getLock("INTERRUPT", USER);
 	MessageBox *box = NULL;
 	if (receiver == -1) {
 		if (!BroadcastMessageBox) {
@@ -418,13 +427,12 @@ void sendMessage(INT32 receiver, char *message, INT32 sendLength,
 		RSQueueNode *node = MessageSuspendQueue;
 		while (node) {
 			removeFromRSQueue(receiver, &MessageSuspendQueue, &node);
+			node->pcb->isSuspended = false;
 			addToReadyQueue(node);
 			node = MessageSuspendQueue;
 		}
-		*errCode = ERR_SUCCESS;
-		return;
+		releaseLock(USER);
 	} else {
-		getLock("INTERRUPT", USER);
 		PCB *pcb = NULL;
 		if (receiver == currentPCB->pid) {
 			pcb = currentPCB;
@@ -450,6 +458,7 @@ void sendMessage(INT32 receiver, char *message, INT32 sendLength,
 						if (i == 2) {
 							removeFromRSQueue(receiver, &MessageSuspendQueue,
 									&p);
+							p->pcb->isSuspended = false;
 							addToReadyQueue(p);
 						}
 						break;
@@ -494,6 +503,7 @@ void sendMessage(INT32 receiver, char *message, INT32 sendLength,
 		}
 		box->size++;
 		printf("new Message added, No. %d\n", box->size);
+//		fflush(stdout);
 		*errCode = ERR_SUCCESS;
 		return;
 	}
@@ -517,7 +527,7 @@ void receiveMessage(INT32 sender, char *messageBuffer, INT32 receiveLength,
 		}
 
 		printf("MY BOX FOUND: %p\n", currentPCB->messageBox);
-		fflush(stdout);
+//		fflush(stdout);
 
 		PidNode *pidNode = PidEverExisted;
 		if (sender != -1) {
@@ -529,7 +539,7 @@ void receiveMessage(INT32 sender, char *messageBuffer, INT32 receiveLength,
 			}
 			if (!pidNode) {
 				printf("sender invalid: %d\n", sender);
-				fflush(stdout);
+//				fflush(stdout);
 				*errCode = ERR_BAD_PARAM;
 				return;
 			}
@@ -537,7 +547,7 @@ void receiveMessage(INT32 sender, char *messageBuffer, INT32 receiveLength,
 
 		printf("sender valid: %d\n", sender);
 
-		fflush(stdout);
+//		fflush(stdout);
 
 		bool needsBroadcastMessageBox = false;
 
@@ -555,7 +565,7 @@ void receiveMessage(INT32 sender, char *messageBuffer, INT32 receiveLength,
 			}
 			if (message) {
 				printf("message found\n");
-				fflush(stdout);
+//				fflush(stdout);
 				if (message->sendLength <= receiveLength) {
 					strcpy(messageBuffer, message->content);
 					*actualSender = message->sender;
@@ -567,12 +577,11 @@ void receiveMessage(INT32 sender, char *messageBuffer, INT32 receiveLength,
 					}
 					free(message);
 					currentPCB->messageBox->size--;
-
 					*errCode = ERR_SUCCESS;
 					printf("valid message\n");
-					fflush(stdout);
+//					fflush(stdout);
 					printf("receive finished\n");
-					fflush(stdout);
+//					fflush(stdout);
 					return;
 				} else {
 					if (sender == -1) {
@@ -584,7 +593,7 @@ void receiveMessage(INT32 sender, char *messageBuffer, INT32 receiveLength,
 				}
 			} else {
 				printf("no message in private box\n");
-				fflush(stdout);
+//				fflush(stdout);
 				if (sender == -1) {
 					needsBroadcastMessageBox = true;
 				} else {
@@ -598,7 +607,7 @@ void receiveMessage(INT32 sender, char *messageBuffer, INT32 receiveLength,
 			if (sender == -1) {
 				needsBroadcastMessageBox = true;
 				printf("looking at BroadcastMessageBox\n");
-				fflush(stdout);
+//				fflush(stdout);
 			} else {
 				if (!pidNode->isAlive) {
 					*errCode = ERR_BAD_PARAM;
@@ -609,7 +618,7 @@ void receiveMessage(INT32 sender, char *messageBuffer, INT32 receiveLength,
 
 		if (needsBroadcastMessageBox) {
 			printf("looking\n");
-			fflush(stdout);
+//			fflush(stdout);
 			if (BroadcastMessageBox) {
 				Message *message = BroadcastMessageBox->head;
 				if (message) {
@@ -624,16 +633,16 @@ void receiveMessage(INT32 sender, char *messageBuffer, INT32 receiveLength,
 						return;
 					} else {
 						printf("going to suspension\n");
-						fflush(stdout);
+//						fflush(stdout);
 					}
 				} else {
 					printf("No message\n");
-					fflush(stdout);
+//					fflush(stdout);
 				}
 			}
 		}
 
-		RSQueueNode *node = (RSQueueNode *) calloc(1, sizeof(RSQueueNode *));
+		RSQueueNode *node = (RSQueueNode *) calloc(1, sizeof(RSQueueNode));
 		node->pcb = currentPCB;
 		node->pcb->isSuspended = true;
 		node->next = NULL;
@@ -873,6 +882,32 @@ void addMessageBox(INT32 receiver) {
 	}
 	newBox->next = MessageBoxQueue;
 	MessageBoxQueue = newBox;
+}
+
+void removeMessageBox(INT32 receiver) {
+	MessageBox *box = MessageBoxQueue;
+	while (box) {
+		if (box->receiver == receiver) {
+			break;
+		}
+		box = box->next;
+	}
+	if (box) {
+		if (box == MessageBoxQueue) {
+			MessageBoxQueue = box->next;
+			if (MessageBoxQueue) {
+				MessageBoxQueue->previous = NULL;
+			}
+		} else {
+			box->previous->next = box->next;
+			if (box->next) {
+				box->next->previous = box->previous;
+			}
+		}
+		free(box);
+	} else {
+		return;
+	}
 }
 
 RSQueueNode *searchInRSQueue(INT32 pid, RSQueueNode *queueHead) {

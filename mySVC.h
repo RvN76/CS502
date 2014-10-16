@@ -22,11 +22,11 @@
 #define MESSAGE_BOX_CAPACITY		8
 #define MESSAGE_LENGTH_UPPERBOUND	64
 
-typedef struct pNode{
+typedef struct pNode {
 	INT32 pid;
 	bool isAlive;
 	struct pNode *next;
-}PidNode;
+} PidNode;
 
 typedef struct ms {
 	INT32 sender;
@@ -106,7 +106,7 @@ void changePriority(INT32, INT32, INT32 *);
 
 void sendMessage(INT32, char *, INT32, INT32 *);
 
-void receiveMessage(INT32, char *, INT32, INT32 *,INT32 *,INT32 *);
+void receiveMessage(INT32, char *, INT32, INT32 *, INT32 *, INT32 *);
 
 void dispatch();
 
@@ -129,6 +129,8 @@ RSQueueNode *searchInRSQueue(INT32, RSQueueNode *);
 void removeFromRSQueue(INT32, RSQueueNode **, RSQueueNode **);
 
 void addMessageBox(INT32);
+
+void removeMessageBox(INT32);
 
 void addNewPid(INT32);
 
