@@ -26,7 +26,7 @@ typedef struct pNode{
 	INT32 pid;
 	bool isAlive;
 	struct pNode *next;
-}pidNode;
+}PidNode;
 
 typedef struct ms {
 	INT32 sender;
@@ -74,7 +74,7 @@ RSQueueNode *ReadyQueue;
 RSQueueNode *SuspendQueue;
 RSQueueNode *MessageSuspendQueue;
 
-pidNode *pidEverExisted;
+PidNode *PidEverExisted;
 
 MessageBox *MessageBoxQueue;
 MessageBox *BroadcastMessageBox;
@@ -108,6 +108,8 @@ void sendMessage(INT32, char *, INT32, INT32 *);
 
 void receiveMessage(INT32, char *, INT32, INT32 *,INT32 *,INT32 *);
 
+void dispatch();
+
 void startTimer(INT32);
 
 void addToTimerQueue(TimerQueueNode *);
@@ -127,6 +129,10 @@ RSQueueNode *searchInRSQueue(INT32, RSQueueNode *);
 void removeFromRSQueue(INT32, RSQueueNode **, RSQueueNode **);
 
 void addMessageBox(INT32);
+
+void addNewPid(INT32);
+
+void killPid(INT32);
 
 void getLock(char *, INT32);
 

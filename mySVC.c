@@ -21,7 +21,7 @@ RSQueueNode *SuspendQueue = NULL;
 MessageBox *MessageBoxQueue = NULL;
 MessageBox *BroadcastMessageBox = NULL;
 
-pidNode *pidEverExisted = NULL;
+PidNode *PidEverExisted = NULL;
 
 INT32 prioritiveProcess = -1;
 bool tryingToHandle[2] = { false, false };
@@ -41,6 +41,7 @@ void osCreateProcess(void *starting_address) {
 	pidToAssign++;
 	p->context = (Z502CONTEXT *) next_context;
 	p->messageBox = NULL;
+	addNewPid(p->pid);
 	currentPCB = p;
 	numOfProcesses++;
 	Z502SwitchContext(SWITCH_CONTEXT_KILL_MODE, &next_context);
@@ -67,6 +68,7 @@ void createProcess(char *process_name, void *entry, INT32 priority,
 		node->previous = NULL;
 		node->next = NULL;
 		addToReadyQueue(node);
+		addNewPid(p->pid);
 		numOfProcesses++;
 		*pidToReturn = p->pid;
 		pidToAssign++;
@@ -104,42 +106,7 @@ void sleepProcess(INT32 timeToSleep) {
 			printf("reset by user (sleep): timer now to %d, pid = %d\n",
 					node->time, node->pcb->pid);
 		}
-		if (ReadyQueue) {
-			currentPCB = ReadyQueue->pcb;
-			RSQueueNode *p = ReadyQueue;
-			ReadyQueue = ReadyQueue->next;
-			if (ReadyQueue) {
-				ReadyQueue->previous = NULL;
-			}
-			free(p);
-			printf("Sleep: Pid now to %d from ReadyQueue\n", currentPCB->pid);
-			releaseLock(USER);
-		} else {
-			TimerQueueNode *p = TimerQueue;
-			while (p != node) {
-				if (p->pcb->isSuspended == false) {
-					break;
-				}
-				p = p->next;
-			}
-			if (p != TimerQueue) {
-				startTimer(p->time - startTime);
-				printf("reset by user (sleep): timer now to %d, pid = %d\n",
-						p->time, p->pcb->pid);
-			}
-			currentPCB = p->pcb;
-			removeFromTimerQueue(p->pcb->pid, &p);
-			startTime = p->time;
-			free(p);
-			printf("Sleep: Pid now to %d from TimerQueue\n", currentPCB->pid);
-			interruptFinished = false;
-			printf("sleep waiting for interrupt\n");
-			releaseLock(USER);
-			Z502Idle();
-			while (!interruptFinished)
-				;
-			printf("waiting finished\n");
-		}
+		dispatch("Sleep", startTime);
 		Z502SwitchContext(SWITCH_CONTEXT_SAVE_MODE,
 				(void *) (&currentPCB->context));
 	}
@@ -206,55 +173,8 @@ void suspendProcess(INT32 pid, INT32 *errCode) {
 		node->next = NULL;
 		node->previous = NULL;
 		addToSuspendQueue(node, &SuspendQueue);
-		if (ReadyQueue) {
-			currentPCB = ReadyQueue->pcb;
-			printf("Terminate: Pid now to %d from ReadyQueue\n",
-					currentPCB->pid);
-			RSQueueNode *p = ReadyQueue;
-			ReadyQueue = ReadyQueue->next;
-			if (ReadyQueue) {
-				ReadyQueue->previous = NULL;
-			}
-			free(p);
-			releaseLock(USER);
-		} else {
-			if (TimerQueue) {
-				TimerQueueNode *p = TimerQueue;
-				while (p) {
-					if (p->pcb->isSuspended == false) {
-						break;
-					}
-					p = p->next;
-				}
-				if (p) {
-					currentPCB = p->pcb;
-					printf("Sleep: Pid now to %d from TimerQueue\n",
-							currentPCB->pid);
-					if (p != TimerQueue) {
-						INT32 currentTime;
-						CALL(MEM_READ(Z502ClockStatus, &currentTime));
-						startTimer(p->time - currentTime);
-						printf(
-								"reset by user (terminate): timer now to %d, pid = %d\n",
-								p->time, p->pcb->pid);
-					}
-					removeFromTimerQueue(p->pcb->pid, &p);
-					free(p);
-				} else {
-					Z502Halt();
-				}
-				interruptFinished = false;
-				releaseLock(USER);
-				printf("terminate waiting for interrupt\n");
-				Z502Idle();
-				while (!interruptFinished)
-					;
-				printf("waiting finished\n");
-			} else {
-				Z502Halt();
-			}
-		}
-		Z502SwitchContext(SWITCH_CONTEXT_KILL_MODE,
+		dispatch("Suspend", -1);
+		Z502SwitchContext(SWITCH_CONTEXT_SAVE_MODE,
 				(void *) (&currentPCB->context));
 	} else {
 		getLock("INTERRUPT", USER);
@@ -315,57 +235,11 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 		Z502Halt();
 		break;
 	case -1:
+		killPid(currentPCB->pid);
 		*errCode = ERR_SUCCESS;
 		numOfProcesses--;
 		getLock("INTERRUPT", USER);
-		if (ReadyQueue) {
-			currentPCB = ReadyQueue->pcb;
-			printf("Terminate: Pid now to %d from ReadyQueue\n",
-					currentPCB->pid);
-			RSQueueNode *p = ReadyQueue;
-			ReadyQueue = ReadyQueue->next;
-			if (ReadyQueue) {
-				ReadyQueue->previous = NULL;
-			}
-			free(p);
-			releaseLock(USER);
-		} else {
-			if (TimerQueue) {
-				TimerQueueNode *p = TimerQueue;
-				while (p) {
-					if (p->pcb->isSuspended == false) {
-						break;
-					}
-					p = p->next;
-				}
-				if (p) {
-					currentPCB = p->pcb;
-					printf("Sleep: Pid now to %d from TimerQueue\n",
-							currentPCB->pid);
-					if (p != TimerQueue) {
-						INT32 currentTime;
-						CALL(MEM_READ(Z502ClockStatus, &currentTime));
-						startTimer(p->time - currentTime);
-						printf(
-								"reset by user (terminate): timer now to %d, pid = %d\n",
-								p->time, p->pcb->pid);
-					}
-					removeFromTimerQueue(p->pcb->pid, &p);
-					free(p);
-				} else {
-					Z502Halt();
-				}
-				interruptFinished = false;
-				releaseLock(USER);
-				printf("terminate waiting for interrupt\n");
-				Z502Idle();
-				while (!interruptFinished)
-					;
-				printf("waiting finished\n");
-			} else {
-				Z502Halt();
-			}
-		}
+		dispatch("Terminate", -1);
 		Z502SwitchContext(SWITCH_CONTEXT_KILL_MODE,
 				(void *) (&currentPCB->context));
 		break;
@@ -388,6 +262,7 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 			free(p);
 		}
 		if (result == ERR_SUCCESS) {
+			killPid(pidToTerminate);
 			numOfProcesses--;
 		}
 		releaseLock(USER);
@@ -625,14 +500,202 @@ void sendMessage(INT32 receiver, char *message, INT32 sendLength,
 }
 
 void receiveMessage(INT32 sender, char *messageBuffer, INT32 receiveLength,
-		INT32 *actualSender, INT32 *actualSendLength, INT32 *errCode) {
-	if (receiveLength < 0 || receiveLength > MESSAGE_LENGTH_UPPERBOUND) {
-		*errCode = ERR_BAD_PARAM;
-		return;
-	}
-	MessageBox *box = NULL;
-	if(sender == -1 && sender != currentPCB->pid){
+		INT32 *actualSendLength, INT32 *actualSender, INT32 *errCode) {
+	while (true) {
+		if (receiveLength < 0 || receiveLength > MESSAGE_LENGTH_UPPERBOUND) {
+			*errCode = ERR_BAD_PARAM;
+			return;
+		}
+		if (!currentPCB->messageBox) {
+			currentPCB->messageBox = MessageBoxQueue;
+			while (currentPCB->messageBox) {
+				if (currentPCB->messageBox->receiver == currentPCB->pid) {
+					break;
+				}
+				currentPCB->messageBox = currentPCB->messageBox->next;
+			}
+		}
 
+		printf("MY BOX FOUND: %p\n", currentPCB->messageBox);
+		fflush(stdout);
+
+		PidNode *pidNode = PidEverExisted;
+		if (sender != -1) {
+			while (pidNode) {
+				if (pidNode->pid == sender) {
+					break;
+				}
+				pidNode = pidNode->next;
+			}
+			if (!pidNode) {
+				printf("sender invalid: %d\n", sender);
+				fflush(stdout);
+				*errCode = ERR_BAD_PARAM;
+				return;
+			}
+		}
+
+		printf("sender valid: %d\n", sender);
+
+		fflush(stdout);
+
+		bool needsBroadcastMessageBox = false;
+
+		if (currentPCB->messageBox) {
+			Message * message = currentPCB->messageBox->head;
+			Message * m = NULL;
+			if (sender != -1) {
+				while (message) {
+					if (message->sender == sender) {
+						break;
+					}
+					m = message;
+					message = message->next;
+				}
+			}
+			if (message) {
+				printf("message found\n");
+				fflush(stdout);
+				if (message->sendLength <= receiveLength) {
+					strcpy(messageBuffer, message->content);
+					*actualSender = message->sender;
+					*actualSendLength = message->sendLength;
+					if (m) {
+						m->next = message->next;
+					} else {
+						currentPCB->messageBox->head = message->next;
+					}
+					free(message);
+					currentPCB->messageBox->size--;
+
+					*errCode = ERR_SUCCESS;
+					printf("valid message\n");
+					fflush(stdout);
+					printf("receive finished\n");
+					fflush(stdout);
+					return;
+				} else {
+					if (sender == -1) {
+						needsBroadcastMessageBox = true;
+					} else {
+						*errCode = ERR_BAD_PARAM;
+						return;
+					}
+				}
+			} else {
+				printf("no message in private box\n");
+				fflush(stdout);
+				if (sender == -1) {
+					needsBroadcastMessageBox = true;
+				} else {
+					if (!pidNode->isAlive) {
+						*errCode = ERR_BAD_PARAM;
+						return;
+					}
+				}
+			}
+		} else {
+			if (sender == -1) {
+				needsBroadcastMessageBox = true;
+				printf("looking at BroadcastMessageBox\n");
+				fflush(stdout);
+			} else {
+				if (!pidNode->isAlive) {
+					*errCode = ERR_BAD_PARAM;
+					return;
+				}
+			}
+		}
+
+		if (needsBroadcastMessageBox) {
+			printf("looking\n");
+			fflush(stdout);
+			if (BroadcastMessageBox) {
+				Message *message = BroadcastMessageBox->head;
+				if (message) {
+					if (message->sendLength <= receiveLength) {
+						strcpy(messageBuffer, message->content);
+						*actualSender = message->sender;
+						*actualSendLength = message->sendLength;
+						BroadcastMessageBox->head = message->next;
+						free(message);
+						BroadcastMessageBox->size--;
+						*errCode = ERR_SUCCESS;
+						return;
+					} else {
+						printf("going to suspension\n");
+						fflush(stdout);
+					}
+				} else {
+					printf("No message\n");
+					fflush(stdout);
+				}
+			}
+		}
+
+		RSQueueNode *node = (RSQueueNode *) calloc(1, sizeof(RSQueueNode *));
+		node->pcb = currentPCB;
+		node->pcb->isSuspended = true;
+		node->next = NULL;
+		node->previous = NULL;
+		getLock("INTERRUPT", USER);
+		addToSuspendQueue(node, &MessageSuspendQueue);
+		dispatch("Receive", -1);
+		Z502SwitchContext(SWITCH_CONTEXT_SAVE_MODE,
+				(void *) (&currentPCB->context));
+	}
+}
+
+void dispatch(char *op, INT32 time) {
+	if (ReadyQueue) {
+		currentPCB = ReadyQueue->pcb;
+		printf("%s: Pid now to %d from ReadyQueue\n", op, currentPCB->pid);
+		RSQueueNode *p = ReadyQueue;
+		ReadyQueue = ReadyQueue->next;
+		if (ReadyQueue) {
+			ReadyQueue->previous = NULL;
+		}
+		free(p);
+		releaseLock(USER);
+	} else {
+		if (TimerQueue) {
+			TimerQueueNode *p = TimerQueue;
+			while (p) {
+				if (p->pcb->isSuspended == false) {
+					break;
+				}
+				p = p->next;
+			}
+			if (p) {
+				currentPCB = p->pcb;
+				printf("%s: Pid now to %d from TimerQueue\n", op,
+						currentPCB->pid);
+				if (p != TimerQueue) {
+					INT32 currentTime;
+					if (time != -1) {
+						currentTime = time;
+					} else {
+						CALL(MEM_READ(Z502ClockStatus, &currentTime));
+					}
+					startTimer(p->time - currentTime);
+					printf("reset by user (%s): timer now to %d, pid = %d\n",
+							op, p->time, p->pcb->pid);
+				}
+				removeFromTimerQueue(p->pcb->pid, &p);
+				free(p);
+			} else {
+				Z502Halt();
+			}
+			interruptFinished = false;
+			releaseLock(USER);
+			printf("%s waiting for interrupt\n", op);
+			Z502Idle();
+			while (!interruptFinished)
+				;
+			printf("waiting finished\n");
+		} else {
+			Z502Halt();
+		}
 	}
 }
 
@@ -803,12 +866,12 @@ void addMessageBox(INT32 receiver) {
 	MessageBox *newBox = (MessageBox *) calloc(1, sizeof(MessageBox));
 	newBox->receiver = receiver;
 	newBox->head = newBox->tail = NULL;
+	newBox->size = 0;
 	newBox->previous = NULL;
 	if (MessageBoxQueue) {
 		MessageBoxQueue->previous = newBox;
 	}
 	newBox->next = MessageBoxQueue;
-	newBox->size = 0;
 	MessageBoxQueue = newBox;
 }
 
@@ -847,6 +910,39 @@ void removeFromRSQueue(INT32 pid, RSQueueNode **queueHead, RSQueueNode **p) {
 		(*p)->previous = NULL;
 		(*p)->next = NULL;
 		return;
+	}
+}
+
+void addNewPid( pid) {
+	PidNode *node = PidEverExisted;
+	while (node) {
+		if (node->pid == pid) {
+			break;
+		}
+		node = node->next;
+	}
+	if (!node) {
+		PidNode *newNode = (PidNode *) calloc(1, sizeof(PidNode));
+		newNode->pid = pid;
+		newNode->isAlive = true;
+		newNode->next = NULL;
+		newNode->next = PidEverExisted;
+		PidEverExisted = newNode;
+	} else {
+		if (!node->isAlive) {
+			node->isAlive = true;
+		}
+	}
+}
+
+void killPid(INT32 pid) {
+	PidNode *p = PidEverExisted;
+	while (p) {
+		if (p->pid == pid && p->isAlive) {
+			p->isAlive = false;
+			break;
+		}
+		p = p->next;
 	}
 }
 
