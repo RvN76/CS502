@@ -17,10 +17,23 @@
 #define USER 		1
 #define INTERRUPT	0
 
+#define	NOT_SUSPENDED		0
+#define WAITING_FOR_MESSAGE	1
+#define	SUSPENDED			2
+
 #define LEGAL_PRIORITY_UPPER_BOUND	100
 
 #define MESSAGE_BOX_CAPACITY		8
 #define MESSAGE_LENGTH_UPPERBOUND	64
+
+#define READYQUEUELOCK		0
+#define TIMERQUEUELOCK		1
+#define SUSPENDQUEUELOCK	2
+#define PRINTERLOCK			3
+
+//INT32 LockingArea[4];
+
+INT32 LockingResult[4];
 
 typedef struct pNode {
 	INT32 pid;
@@ -36,11 +49,11 @@ typedef struct ms {
 } Message;
 
 typedef struct msBox {
-	INT32 receiver;
+	INT32 recipient;
 	Message *head;
 	Message *tail;
 	INT32 size;
-	struct msBox *previous;
+//	struct msBox *previous;
 	struct msBox *next;
 } MessageBox;
 
@@ -48,7 +61,7 @@ typedef struct {
 	INT32 pid;
 	char process_name[16];
 	INT32 priority;
-	bool isSuspended;
+	INT32 suspended;
 	Z502CONTEXT *context;
 	MessageBox *messageBox;
 } PCB;
@@ -72,19 +85,19 @@ PCB *currentPCB;
 TimerQueueNode *TimerQueue;
 RSQueueNode *ReadyQueue;
 RSQueueNode *SuspendQueue;
-RSQueueNode *MessageSuspendQueue;
+//RSQueueNode *MessageSuspendQueue;
 
 PidNode *PidEverExisted;
 
 MessageBox *MessageBoxQueue;
 MessageBox *BroadcastMessageBox;
 
-INT32 prioritiveProcess;
-bool tryingToHandle[2];
+//INT32 prioritiveProcess;
+//bool tryingToHandle[2];
 
-bool interruptFinished;
+bool InterruptFinished;
 
-char operation[64];
+//char operation[64];
 
 void osCreateProcess(void *);
 
@@ -122,7 +135,7 @@ INT32 checkProcessParams(char *, void *, INT32);
 
 void addToReadyQueue(RSQueueNode *);
 
-void addToSuspendQueue(RSQueueNode *, RSQueueNode **);
+void addToSuspendQueue(RSQueueNode *);
 
 RSQueueNode *searchInRSQueue(INT32, RSQueueNode *);
 
@@ -139,5 +152,9 @@ void killPid(INT32);
 void getLock(char *, INT32);
 
 void releaseLock(INT32);
+
+void getMyLock(INT32, char *);
+
+void releaseMyLock(INT32);
 
 #endif /* MYSVC_H_ */

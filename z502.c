@@ -1315,9 +1315,9 @@ void Z502SwitchContext(BOOL kill_or_save, void **IncomingContextPointer) {
     Z502_PAGE_TBL_ADDR = curr_ptr->page_table_ptr;
     Z502_PAGE_TBL_LENGTH = curr_ptr->page_table_len;
     Z502_MODE = curr_ptr->program_mode;
-    if (Z502_MODE != KERNEL_MODE ){
-Z502_MODE = Z502_MODE;
-}
+	if (Z502_MODE != KERNEL_MODE) {
+		Z502_MODE = Z502_MODE;
+	}
     Z502_REG1 = curr_ptr->reg1;
     Z502_REG2 = curr_ptr->reg2;
     Z502_REG3 = curr_ptr->reg3;

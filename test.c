@@ -1135,7 +1135,7 @@ void test1x(void) {
     int    Iterations;
 
     GET_PROCESS_ID("", &Z502_REG2, &Z502_REG9);
-    printf("Release %s:Test 1x: Pid %ld\n", CURRENT_REL, Z502_REG2);
+//    printf("Release %s:Test 1x: Pid %ld\n", CURRENT_REL, Z502_REG2);
 
     for (Iterations = 0; Iterations < NUMBER_OF_TEST1X_ITERATIONS;
             Iterations++) {
@@ -1143,8 +1143,8 @@ void test1x(void) {
         RandomSleep = (RandomSleep * Z502_REG3) % 143;
         SLEEP(RandomSleep);
         GET_TIME_OF_DAY(&Z502_REG4);
-        printf("Test1X: Pid = %d, Sleep Time = %ld, Latency Time = %d\n",
-                (int) Z502_REG2, RandomSleep, (int) (Z502_REG4 - Z502_REG3));
+//        printf("Test1X: Pid = %d, Sleep Time = %ld, Latency Time = %d\n",
+//                (int) Z502_REG2, RandomSleep, (int) (Z502_REG4 - Z502_REG3));
     }
     printf("Test1x, PID %ld, Ends at Time %ld\n", Z502_REG2, Z502_REG4);
 

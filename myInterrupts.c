@@ -10,9 +10,9 @@
 #include "stdio.h"
 
 void timerInterrupt() {
-	sprintf(operation, "wakeUpProcess");
-	getLock("USER", INTERRUPT);
+//	sprintf(operation, "wakeUpProcess");
+//	getLock("USER", INTERRUPT);
 	wakeUpProcesses(false, NULL);
-	interruptFinished = true;
-	releaseLock(INTERRUPT);
+//	interruptFinished = true;
+//	releaseLock(INTERRUPT);
 }
