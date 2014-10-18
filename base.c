@@ -98,6 +98,11 @@ void fault_handler(void) {
 			status);
 	// Clear out this device - we're done with it
 	MEM_WRITE(Z502InterruptClear, &Index);
+
+	printf("Terminate current process\n");
+	INT32 termResult;
+	terminateProcess(-1, &termResult);
+
 } /* End of fault_handler */
 
 /************************************************************************
