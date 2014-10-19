@@ -468,9 +468,7 @@ void sendMessage(INT32 recipient, char *message, INT32 sendLength,
 			if (node->pcb->suspended == WAITING_FOR_MESSAGE) {
 				removeFromRSQueue(recipient, &SuspendQueue, &node);
 				node->pcb->suspended = NOT_SUSPENDED;
-//				getMyLock(READYQUEUELOCK);
 				addToReadyQueue(node);
-//				releaseMyLock(READYQUEUELOCK);
 			}
 			node = node->next;
 		}
@@ -496,13 +494,16 @@ void sendMessage(INT32 recipient, char *message, INT32 sendLength,
 					p = searchInRSQueue(recipient, ReadyQueue);
 				}
 				if (p) {
-					if (p->pcb->suspended == WAITING_FOR_MESSAGE) {
-						removeFromRSQueue(recipient, &SuspendQueue, &p);
-						releaseMyLock(SUSPENDQUEUELOCK);
-						p->pcb->suspended = NOT_SUSPENDED;
-//						getMyLock(READYQUEUELOCK);
-						addToReadyQueue(p);
-
+					if (p) {
+						if (p->pcb->suspended == WAITING_FOR_MESSAGE) {
+							removeFromRSQueue(recipient, &SuspendQueue, &p);
+							releaseMyLock(SUSPENDQUEUELOCK);
+							p->pcb->suspended = NOT_SUSPENDED;
+//							getMyLock(READYQUEUELOCK);
+							addToReadyQueue(p);
+						} else {
+							releaseMyLock(SUSPENDQUEUELOCK);
+						}
 					}
 					pcb = p->pcb;
 					releaseMyLock(READYQUEUELOCK);
@@ -709,47 +710,71 @@ void dispatch(char *op, INT32 time) {
 		releaseMyLock(TIMERQUEUELOCK);
 		releaseMyLock(READYQUEUELOCK);
 	} else {
-		releaseMyLock(READYQUEUELOCK);
+//		releaseMyLock(READYQUEUELOCK);
 //		getMyLock(TIMERQUEUELOCK);
-		if (TimerQueue) {
-			TimerQueueNode *p = TimerQueue;
-			while (p) {
-				if (p->pcb->suspended == NOT_SUSPENDED) {
-					break;
-				}
-				p = p->next;
-			}
-			if (p) {
-				currentPCB = p->pcb;
-//				printf("%s: Pid now to %d from TimerQueue\n", op,
-//						currentPCB->pid);
-				if (p != TimerQueue) {
-					INT32 currentTime;
-					if (time != -1) {
-						currentTime = time;
-					} else {
-						CALL(MEM_READ(Z502ClockStatus, &currentTime));
-					}
-					startTimer(p->time - currentTime);
-//					printf("reset by user (%s): timer now to %d, pid = %d\n",
-//							op, p->time, p->pcb->pid);
-				}
-				removeFromTimerQueue(p->pcb->pid, &p);
-				free(p);
-//				releaseMyLock(TIMERQUEUELOCK);
-			} else {
-				Z502Halt();
-			}
-			InterruptFinished = false;
-//			releaseLock(USER);
-			releaseMyLock(TIMERQUEUELOCK);
+//		if (TimerQueue) {
+//			TimerQueueNode *p = TimerQueue;
+//			while (p) {
+//				if (p->pcb->suspended == NOT_SUSPENDED) {
+//					break;
+//				}
+//				p = p->next;
+//			}
+//			if (p) {
+//				currentPCB = p->pcb;
+////				printf("%s: Pid now to %d from TimerQueue\n", op,
+////						currentPCB->pid);
+//				if (p != TimerQueue) {
+//					INT32 currentTime;
+//					if (time != -1) {
+//						currentTime = time;
+//					} else {
+//						CALL(MEM_READ(Z502ClockStatus, &currentTime));
+//					}
+//					startTimer(p->time - currentTime);
+////					printf("reset by user (%s): timer now to %d, pid = %d\n",
+////							op, p->time, p->pcb->pid);
+//				}
+//				removeFromTimerQueue(p->pcb->pid, &p);
+//				free(p);
+////				releaseMyLock(TIMERQUEUELOCK);
+//			} else {
+//				Z502Halt();
+//			}
+//			InterruptFinished = false;
+////			releaseLock(USER);
+//			releaseMyLock(TIMERQUEUELOCK);
 //			releaseMyLock(READYQUEUELOCK);
 
 //			printf("%s waiting for interrupt\n", op);
-			Z502Idle();
-			while (!InterruptFinished)
-				;
+//			Z502Idle();
+//			while (!InterruptFinished)
+//				;
 //			printf("waiting finished\n");
+		if (TimerQueue) {
+			TimerQueueNode *p = TimerQueue;
+			RSQueueNode *q = ReadyQueue;
+			PCB *pcb = NULL;
+			while (p) {
+				if (p->pcb->suspended == NOT_SUSPENDED) {
+					pcb = p->pcb;
+					break;
+				}
+			}
+			while ((q = searchInRSQueue(pcb->pid, ReadyQueue)) == NULL) {
+				releaseMyLock(TIMERQUEUELOCK);
+				releaseMyLock(READYQUEUELOCK);
+				InterruptFinished = false;
+				Z502Idle();
+				while (!InterruptFinished)
+					;
+				getMyLock(READYQUEUELOCK, "dispatch");
+				getMyLock(TIMERQUEUELOCK, "dispatch");
+			}
+			releaseMyLock(TIMERQUEUELOCK);
+			currentPCB = pcb;
+			removeFromRSQueue(pcb->pid, &ReadyQueue, &q);
+			releaseMyLock(READYQUEUELOCK);
 		} else {
 			Z502Halt();
 		}
