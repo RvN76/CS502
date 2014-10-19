@@ -12,7 +12,7 @@
 void timerInterrupt() {
 //	sprintf(operation, "wakeUpProcess");
 //	getLock("USER", INTERRUPT);
-	wakeUpProcesses(false, NULL);
+	wakeUpProcesses();
 //	interruptFinished = true;
 //	releaseLock(INTERRUPT);
 }

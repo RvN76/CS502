@@ -109,7 +109,7 @@ void getProcessID(char *, INT32 *, INT32 *);
 
 void sleepProcess(INT32);
 
-void wakeUpProcesses(bool, INT32 *);
+void wakeUpProcesses();
 
 void suspendProcess(INT32, INT32 *);
 
@@ -149,12 +149,10 @@ void addNewPid(INT32);
 
 void killPid(INT32);
 
-void getLock(char *, INT32);
-
-void releaseLock(INT32);
-
-void getMyLock(INT32, char *);
+void getMyLock(INT32);
 
 void releaseMyLock(INT32);
+
+void schedulerPrinter(INT32, INT32, char *, INT32);
 
 #endif /* MYSVC_H_ */
