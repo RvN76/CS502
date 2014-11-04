@@ -42,15 +42,15 @@ void osCreateProcess(void *starting_address) {
 	addNewPid(p->pid);
 	currentPCB = p;
 	numOfProcesses++;
+//	Switch the context and begin the test
 	Z502SwitchContext(SWITCH_CONTEXT_KILL_MODE, &next_context);
 }
 
 void createProcess(char *process_name, void *entry, INT32 priority,
 		INT32 *pidToReturn, INT32 *errCode) {
-//	sprintf(operation, "createProcess(%s, %p, %d)", process_name, entry,
-//			priority);
-//	getLock("INTERRUPT", USER);
+
 	INT32 checkResult = checkProcessParams(process_name, entry, priority);
+//	If the params are all valid, create a new PCB and add it to ReadyQueue
 	if (checkResult == ERR_SUCCESS) {
 		PCB *p = (PCB *) calloc(1, sizeof(PCB));
 		strcpy(p->process_name, process_name);
@@ -84,6 +84,7 @@ void sleepProcess(INT32 timeToSleep) {
 		timeToSleep -= 6;
 	}
 	INT32 startTime, absoluteTime;
+//	add the current process to TimerQueue
 	CALL(MEM_READ(Z502ClockStatus, &startTime));
 	absoluteTime = startTime + timeToSleep;
 	TimerQueueNode *node = (TimerQueueNode *) calloc(1, sizeof(TimerQueueNode));
@@ -101,6 +102,7 @@ void sleepProcess(INT32 timeToSleep) {
 //				node->pcb->pid);
 	}
 	releaseMyLock(TIMERQUEUELOCK);
+//	decide what to run next and switch
 	dispatch("Sleep", startTime);
 	Z502SwitchContext(SWITCH_CONTEXT_SAVE_MODE,
 			(void *) (&currentPCB->context));
@@ -113,6 +115,8 @@ void wakeUpProcesses() {
 	TimerQueueNode *p = NULL;
 	PCB *pcb = NULL;
 	RSQueueNode *node = NULL;
+//	get the current time, put all nodes in TimerQueue whose time <= currentTime into
+//	ReadyQueue or SuspendQueue
 	getMyLock(READYQUEUELOCK);
 	getMyLock(TIMERQUEUELOCK);
 	while (TimerQueue && TimerQueue->time <= currentTime) {
@@ -138,6 +142,7 @@ void wakeUpProcesses() {
 		}
 //		getMyLock(TIMERQUEUELOCK);
 	}
+//	reset the timer
 	if (TimerQueue) {
 		startTimer(TimerQueue->time - currentTime);
 	}
@@ -150,14 +155,13 @@ void wakeUpProcesses() {
 }
 
 void suspendProcess(INT32 pid, INT32 *errCode) {
-//	sprintf(operation, "suspendProcess(%d)", pid);
-//	INT32 result;
 	if (pid == -1 || pid == currentPCB->pid) {
 		*errCode = ERR_BAD_PARAM;
 		return;
 	} else {
 //		getLock("INTERRUPT", USER);
 		RSQueueNode *p = NULL;
+//		check queues for the pid, move to SuspendQueue or simply label as "Suspended"
 		getMyLock(READYQUEUELOCK);
 		getMyLock(TIMERQUEUELOCK);
 		getMyLock(SUSPENDQUEUELOCK);
@@ -211,6 +215,7 @@ void suspendProcess(INT32 pid, INT32 *errCode) {
 
 void resumeProcess(INT32 pid, INT32 *errCode) {
 	RSQueueNode *p = NULL;
+// check queues for pid, resume or label as "Not suspended"
 	getMyLock(READYQUEUELOCK);
 	getMyLock(TIMERQUEUELOCK);
 	getMyLock(SUSPENDQUEUELOCK);
@@ -256,6 +261,7 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 		*errCode = ERR_SUCCESS;
 		numOfProcesses--;
 		INT32 tPid = currentPCB->pid;
+//		decide what to run next
 		dispatch("Term", -1);
 		killPid(tPid);
 		removeMessageBox(tPid);
@@ -263,6 +269,7 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 				(void *) (&currentPCB->context));
 		break;
 	default: {
+//		check the queues for pid and remove it
 		RSQueueNode *p = NULL;
 		getMyLock(READYQUEUELOCK);
 		getMyLock(TIMERQUEUELOCK);
@@ -420,6 +427,7 @@ void changePriority(INT32 pid, INT32 priority, INT32 *errCode) {
 
 void sendMessage(INT32 recipient, char *message, INT32 sendLength,
 		INT32 *errCode) {
+//	send length and message length validity
 	if (sendLength > MESSAGE_LENGTH_UPPERBOUND || sendLength < 0
 			|| strlen(message) > sendLength) {
 		*errCode = ERR_BAD_PARAM;
@@ -438,6 +446,7 @@ void sendMessage(INT32 recipient, char *message, INT32 sendLength,
 		getMyLock(READYQUEUELOCK);
 		getMyLock(SUSPENDQUEUELOCK);
 		RSQueueNode *node = SuspendQueue;
+//		wake the recipients
 		while (node) {
 			if (node->pcb->suspended == WAITING_FOR_MESSAGE) {
 				removeFromRSQueue(recipient, &SuspendQueue, &node);
@@ -453,6 +462,7 @@ void sendMessage(INT32 recipient, char *message, INT32 sendLength,
 		if (recipient == currentPCB->pid) {
 			pcb = currentPCB;
 		} else {
+//			recipient validity check and wake
 			getMyLock(READYQUEUELOCK);
 			getMyLock(SUSPENDQUEUELOCK);
 			getMyLock(TIMERQUEUELOCK);
@@ -493,6 +503,7 @@ void sendMessage(INT32 recipient, char *message, INT32 sendLength,
 			}
 			releaseMyLock(TIMERQUEUELOCK);
 		}
+//		locate the box
 		if (pcb) {
 			box = MessageBoxQueue;
 			while (box) {
@@ -512,6 +523,7 @@ void sendMessage(INT32 recipient, char *message, INT32 sendLength,
 			return;
 		}
 	}
+//	check box size and copy message
 	if (box->size == MESSAGE_BOX_CAPACITY) {
 		*errCode = ERR_BAD_PARAM;
 		return;
@@ -537,11 +549,12 @@ void sendMessage(INT32 recipient, char *message, INT32 sendLength,
 
 void receiveMessage(INT32 sender, char *messageBuffer, INT32 receiveLength,
 		INT32 *actualSendLength, INT32 *actualSender, INT32 *errCode) {
+	if (receiveLength < 0 || receiveLength > MESSAGE_LENGTH_UPPERBOUND) {
+		*errCode = ERR_BAD_PARAM;
+		return;
+	}
 	while (true) {
-		if (receiveLength < 0 || receiveLength > MESSAGE_LENGTH_UPPERBOUND) {
-			*errCode = ERR_BAD_PARAM;
-			return;
-		}
+//		find its own box
 		if (!currentPCB->messageBox) {
 			currentPCB->messageBox = MessageBoxQueue;
 			while (currentPCB->messageBox) {
@@ -552,6 +565,7 @@ void receiveMessage(INT32 sender, char *messageBuffer, INT32 receiveLength,
 			}
 		}
 
+//		Check existence of sender
 		PidNode *pidNode = PidEverExisted;
 		if (sender != -1) {
 			while (pidNode) {
@@ -567,7 +581,8 @@ void receiveMessage(INT32 sender, char *messageBuffer, INT32 receiveLength,
 		}
 
 		bool needsBroadcastMessageBox = false;
-
+// find message in private box
+//		if no message and sender is -1, turn to BroadcastMessageBox
 		if (currentPCB->messageBox) {
 			Message *message = currentPCB->messageBox->head;
 			Message *m = NULL;
@@ -646,7 +661,7 @@ void receiveMessage(INT32 sender, char *messageBuffer, INT32 receiveLength,
 				}
 			}
 		}
-
+//going to suspension, and starts over once it runs again
 		RSQueueNode *node = (RSQueueNode *) calloc(1, sizeof(RSQueueNode));
 		node->pcb = currentPCB;
 		node->pcb->suspended = WAITING_FOR_MESSAGE;
@@ -665,6 +680,7 @@ void dispatch(char *op, INT32 time) {
 	PCB *pcb = NULL;
 	getMyLock(READYQUEUELOCK);
 	getMyLock(TIMERQUEUELOCK);
+//If ReadyQueue is not null, pick the first one
 	if (ReadyQueue) {
 //		printf("%s: Pid now to %d from ReadyQueue\n", op, currentPCB->pid);
 		RSQueueNode *p = ReadyQueue;
@@ -679,6 +695,8 @@ void dispatch(char *op, INT32 time) {
 		schedulerPrinter(currentPCB->pid, pcb->pid, op, time);
 		currentPCB = pcb;
 	} else {
+//	if the timer queue is  not null, pick the first "NOT_SUSPEND one"
+//	and waits until it appears in the ReadyQueue
 		if (TimerQueue) {
 			TimerQueueNode *p = TimerQueue;
 			RSQueueNode *q = ReadyQueue;
@@ -694,6 +712,7 @@ void dispatch(char *op, INT32 time) {
 				releaseMyLock(READYQUEUELOCK);
 				InterruptFinished = false;
 				Z502Idle();
+//			keep waiting until the interrupt handler finishes
 				while (!InterruptFinished)
 					;
 				getMyLock(READYQUEUELOCK);
@@ -1012,6 +1031,7 @@ void schedulerPrinter(INT32 currentPid, INT32 targetPid, char *action,
 	getMyLock(TIMERQUEUELOCK);
 	getMyLock(SUSPENDQUEUELOCK);
 
+//	print the ReadyQueue
 	pR = ReadyQueue;
 	while (pR) {
 		SP_setup(SP_READY_MODE, pR->pcb->pid);
@@ -1019,6 +1039,7 @@ void schedulerPrinter(INT32 currentPid, INT32 targetPid, char *action,
 	}
 	releaseMyLock(READYQUEUELOCK);
 
+//	print the Timerqueue
 	pT = TimerQueue;
 	while (pT) {
 		SP_setup(SP_TIMER_SUSPENDED_MODE, pT->pcb->pid);
@@ -1026,6 +1047,7 @@ void schedulerPrinter(INT32 currentPid, INT32 targetPid, char *action,
 	}
 	releaseMyLock(TIMERQUEUELOCK);
 
+//	print the SuspendQueue
 	pS = SuspendQueue;
 	while (pS) {
 		SP_setup(SP_PROCESS_SUSPENDED_MODE, pS->pcb->pid);
@@ -1034,6 +1056,7 @@ void schedulerPrinter(INT32 currentPid, INT32 targetPid, char *action,
 
 	releaseMyLock(SUSPENDQUEUELOCK);
 
+//  print the dead pids
 	pP = PidEverExisted;
 	while (pP) {
 		if (!pP->isAlive) {

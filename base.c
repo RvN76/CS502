@@ -26,6 +26,7 @@
 #include            "syscalls.h"
 #include			"mySVC.h"
 #include			"myInterrupts.h"
+#include			"myTest.h"
 #include            "protos.h"
 #include            "string.h"
 
@@ -99,6 +100,7 @@ void fault_handler(void) {
 	// Clear out this device - we're done with it
 	MEM_WRITE(Z502InterruptClear, &Index);
 
+//	Terminate the current process
 	printf("Terminate current process\n");
 	INT32 termResult;
 	terminateProcess(-1, &termResult);
@@ -294,6 +296,9 @@ void osInit(int argc, char *argv[]) {
 
 		if (strcmp(argv[1], "test1l") == 0) {
 			testToRun = (void *) test1l;
+		}
+		if (strcmp(argv[1], "test1m") == 0) {
+			testToRun = (void *) myTest1m;
 		}
 	}
 
