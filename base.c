@@ -26,6 +26,7 @@
 #include            "syscalls.h"
 #include			"mySVC.h"
 #include			"myInterrupts.h"
+#include			"memoryManager.h"
 #include			"myTest.h"
 #include            "protos.h"
 #include            "string.h"
@@ -72,6 +73,10 @@ void interrupt_handler(void) {
 	case TIMER_INTERRUPT :
 		timerInterrupt();
 		break;
+	case DISK_INTERRUPT_DISK1 :
+	case DISK_INTERRUPT_DISK2 :
+		diskInterrupt();
+		break;
 	default:
 		break;
 	}
@@ -100,10 +105,29 @@ void fault_handler(void) {
 	// Clear out this device - we're done with it
 	MEM_WRITE(Z502InterruptClear, &Index);
 
+	switch (device_id) {
+	case PRIVILEGED_INSTRUCTION :
 //	Terminate the current process
-	printf("Terminate current process\n");
-	INT32 termResult;
-	terminateProcess(-1, &termResult);
+		printf("Terminate current process\n");
+		INT32 termResult;
+		terminateProcess(-1, &termResult);
+		break;
+	case INVALID_MEMORY :
+		if (!Z502_PAGE_TBL_ADDR) {
+			Z502_PAGE_TBL_ADDR = (UINT16 *) calloc(VIRTUAL_MEM_PAGES,
+					sizeof(UINT16));
+			Z502_PAGE_TBL_LENGTH = VIRTUAL_MEM_PAGES;
+		}
+		if (status >= Z502_PAGE_TBL_LENGTH || status < 0) {
+			printf("Invalid page number: %d\n", status);
+			printf("Terminate current process\n");
+			INT32 termResult;
+			terminateProcess(-1, &termResult);
+		} else {
+			initializeSlot(status);
+		}
+		break;
+	}
 
 } /* End of fault_handler */
 
@@ -197,6 +221,18 @@ void svc(SYSTEM_CALL_DATA *SystemCallData) {
 				(INT32 *) SystemCallData->Argument[3],
 				(INT32 *) SystemCallData->Argument[4],
 				(INT32 *) SystemCallData->Argument[5]);
+		break;
+//	Call to read from disk
+	case SYSNUM_DISK_READ:
+		readFromDisk((INT32) SystemCallData->Argument[0],
+				(INT32) SystemCallData->Argument[1],
+				(char *) SystemCallData->Argument[2]);
+		break;
+//	Call to write to disk
+	case SYSNUM_DISK_WRITE:
+		writeToDisk((INT32) SystemCallData->Argument[0],
+				(INT32) SystemCallData->Argument[1],
+				(char *) SystemCallData->Argument[2]);
 		break;
 //	other cases: report
 	default:
@@ -297,8 +333,41 @@ void osInit(int argc, char *argv[]) {
 		if (strcmp(argv[1], "test1l") == 0) {
 			testToRun = (void *) test1l;
 		}
+
 		if (strcmp(argv[1], "test1m") == 0) {
 			testToRun = (void *) myTest1m;
+		}
+
+		if (strcmp(argv[1], "test2a") == 0) {
+			testToRun = (void *) test2a;
+		}
+
+		if (strcmp(argv[1], "test2b") == 0) {
+			testToRun = (void *) test2b;
+		}
+
+		if (strcmp(argv[1], "test2c") == 0) {
+			testToRun = (void *) test2c;
+		}
+
+		if (strcmp(argv[1], "test2d") == 0) {
+			testToRun = (void *) test2d;
+		}
+
+		if (strcmp(argv[1], "test2e") == 0) {
+			testToRun = (void *) test2e;
+		}
+
+		if (strcmp(argv[1], "test2f") == 0) {
+			testToRun = (void *) test2f;
+		}
+
+		if (strcmp(argv[1], "test2g") == 0) {
+			testToRun = (void *) test2g;
+		}
+
+		if (strcmp(argv[1], "test2h") == 0) {
+			testToRun = (void *) test2h;
 		}
 	}
 

@@ -1308,9 +1308,11 @@ void test2b(void) {
 	Z502_REG8 = 5 * PGSIZE;
 	Z502_REG6 = Z502_REG8 + Z502_REG4 + 7;
 	MEM_WRITE(Z502_REG8, &Z502_REG6);
+	fflush(stdout);
 
 	// Loop through all the memory addresses defined
 	while (TRUE ) {
+		printf("ROUND %d\n", Z502_REG5);
 		Z502_REG3 = test_data[(INT16) Z502_REG5];
 		Z502_REG1 = Z502_REG3 + Z502_REG4 + 27;
 		MEM_WRITE(Z502_REG3, &Z502_REG1);
@@ -1330,6 +1332,7 @@ void test2b(void) {
 		if (Z502_REG6 != Z502_REG7)
 			printf("AN ERROR HAS OCCURRED.\n");
 		Z502_REG5++;
+		fflush(stdout);
 	}
 }                            // End of test2b    
 

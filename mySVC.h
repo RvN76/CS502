@@ -26,12 +26,13 @@
 #define MESSAGE_BOX_CAPACITY		8
 #define MESSAGE_LENGTH_UPPERBOUND	64
 
+#define READ 	(BOOL)0
+#define WRITE	(BOOL)1
+
 #define READYQUEUELOCK		0
 #define TIMERQUEUELOCK		1
 #define SUSPENDQUEUELOCK	2
 #define PRINTERLOCK			3
-
-//INT32 LockingArea[4];
 
 INT32 LockingResult[4];
 
@@ -53,7 +54,6 @@ typedef struct msBox {
 	Message *head;
 	Message *tail;
 	INT32 size;
-//	struct msBox *previous;
 	struct msBox *next;
 } MessageBox;
 
@@ -79,13 +79,22 @@ typedef struct rNode {
 	struct rNode *next;
 } RSQueueNode;
 
+typedef struct dNode {
+	PCB *pcb;
+	bool action;
+	INT16 disk_id;
+	INT16 sector;
+	char *data;
+	struct dNode *next;
+} DiskQueueNode;
+
 INT32 numOfProcesses;
 INT32 pidToAssign;
 PCB *currentPCB;
 TimerQueueNode *TimerQueue;
 RSQueueNode *ReadyQueue;
 RSQueueNode *SuspendQueue;
-//RSQueueNode *MessageSuspendQueue;
+DiskQueueNode *DiskQueue;
 
 PidNode *PidEverExisted;
 
@@ -109,8 +118,6 @@ void getProcessID(char *, INT32 *, INT32 *);
 
 void sleepProcess(INT32);
 
-void wakeUpProcesses();
-
 void suspendProcess(INT32, INT32 *);
 
 void resumeProcess(INT32, INT32 *);
@@ -120,6 +127,10 @@ void changePriority(INT32, INT32, INT32 *);
 void sendMessage(INT32, char *, INT32, INT32 *);
 
 void receiveMessage(INT32, char *, INT32, INT32 *, INT32 *, INT32 *);
+
+void readFromDisk(INT16, INT16, char *);
+
+void writeToDisk(INT16, INT16, char *);
 
 void dispatch();
 

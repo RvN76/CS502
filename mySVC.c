@@ -6,6 +6,7 @@
  */
 
 #include "mySVC.h"
+#include "memoryManager.h"
 #include "syscalls.h"
 #include "protos.h"
 
@@ -18,6 +19,7 @@ PCB *currentPCB = NULL;
 TimerQueueNode *TimerQueue = NULL;
 RSQueueNode *ReadyQueue = NULL;
 RSQueueNode *SuspendQueue = NULL;
+DiskQueueNode *DiskQueue = NULL;
 
 MessageBox *MessageBoxQueue = NULL;
 MessageBox *BroadcastMessageBox = NULL;
@@ -48,7 +50,6 @@ void osCreateProcess(void *starting_address) {
 
 void createProcess(char *process_name, void *entry, INT32 priority,
 		INT32 *pidToReturn, INT32 *errCode) {
-
 	INT32 checkResult = checkProcessParams(process_name, entry, priority);
 //	If the params are all valid, create a new PCB and add it to ReadyQueue
 	if (checkResult == ERR_SUCCESS) {
@@ -106,52 +107,6 @@ void sleepProcess(INT32 timeToSleep) {
 	dispatch("Sleep", startTime);
 	Z502SwitchContext(SWITCH_CONTEXT_SAVE_MODE,
 			(void *) (&currentPCB->context));
-}
-
-void wakeUpProcesses() {
-	INT32 currentTime;
-	CALL(MEM_READ(Z502ClockStatus, &currentTime));
-
-	TimerQueueNode *p = NULL;
-	PCB *pcb = NULL;
-	RSQueueNode *node = NULL;
-//	get the current time, put all nodes in TimerQueue whose time <= currentTime into
-//	ReadyQueue or SuspendQueue
-	getMyLock(READYQUEUELOCK);
-	getMyLock(TIMERQUEUELOCK);
-	while (TimerQueue && TimerQueue->time <= currentTime) {
-		p = TimerQueue;
-		TimerQueue = p->next;
-		if (TimerQueue) {
-			TimerQueue->previous = NULL;
-		}
-		pcb = p->pcb;
-		free(p);
-//		releaseMyLock(TIMERQUEUELOCK);
-		node = (RSQueueNode *) calloc(1, sizeof(RSQueueNode));
-		node->pcb = pcb;
-		node->next = node->previous = NULL;
-		if (pcb->suspended == NOT_SUSPENDED) {
-//			getMyLock(READYQUEUELOCK);
-			addToReadyQueue(node);
-//			releaseMyLock(READYQUEUELOCK);
-		} else {
-			getMyLock(SUSPENDQUEUELOCK);
-			addToSuspendQueue(node);
-			releaseMyLock(SUSPENDQUEUELOCK);
-		}
-//		getMyLock(TIMERQUEUELOCK);
-	}
-//	reset the timer
-	if (TimerQueue) {
-		startTimer(TimerQueue->time - currentTime);
-	}
-	releaseMyLock(TIMERQUEUELOCK);
-	releaseMyLock(READYQUEUELOCK);
-	schedulerPrinter(currentPCB->pid, currentPCB->pid, "INTER", currentTime);
-	InterruptFinished = true;
-	return;
-//	printf("interrupt finished\n");
 }
 
 void suspendProcess(INT32 pid, INT32 *errCode) {
@@ -674,6 +629,14 @@ void receiveMessage(INT32 sender, char *messageBuffer, INT32 receiveLength,
 		Z502SwitchContext(SWITCH_CONTEXT_SAVE_MODE,
 				(void *) (&currentPCB->context));
 	}
+}
+
+void readFromDisk(INT16 disk_id, INT16 sector, char *data) {
+
+}
+
+void writeToDisk(INT16 disk_id, INT16 sector, char *data) {
+
 }
 
 void dispatch(char *op, INT32 time) {

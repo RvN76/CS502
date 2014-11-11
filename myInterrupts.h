@@ -10,4 +10,6 @@
 
 void timerInterrupt();
 
+void diskInterrupt();
+
 #endif /* MYINTERRUPTS_H_ */

@@ -241,6 +241,9 @@ void MemoryCommon(INT32 VirtualAddress, char *data_ptr, BOOL read_or_write) {
 
     page_is_valid = FALSE;
 
+    printf("page number: %d\n", VirtualPageNumber);
+    fflush(stdout);
+
     /*  Loop until the virtual page passes all the tests        */
 
     while (page_is_valid == FALSE ) {
