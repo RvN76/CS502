@@ -650,7 +650,7 @@ void requestForDisk(INT16 action, INT32 disk_id, INT32 sector, char *data) {
 	getMyLock(DISKQUEUELOCK);
 	addToDiskQueue(node);
 //	releaseMyLock(DISKQUEUELOCK);
-	if (node == DiskQueue) {
+	if (DiskOccupation[disk_id - 1] == -1) {
 		DiskOccupation[disk_id - 1] = currentPCB->pid;
 		MEM_WRITE(Z502DiskSetID, &node->disk_id);
 		MEM_WRITE(Z502DiskSetSector, &node->sector);
@@ -1024,12 +1024,8 @@ void getMyLock(INT32 type) {
 }
 
 void releaseMyLock(INT32 type) {
-	READ_MODIFY((INT32)(MEMORY_INTERLOCK_BASE + 16 + type), 0, (BOOL )0,
+	READ_MODIFY((INT32)(MEMORY_INTERLOCK_BASE + 16 + type), 0, (BOOL )1,
 			&LockingResult[type]);
-	if (LockingResult[type] != 1) {
-		READ_MODIFY((INT32)(MEMORY_INTERLOCK_BASE + 16 + type), 0, (BOOL )1,
-				&LockingResult[type]);
-	}
 }
 
 void schedulerPrinter(INT32 currentPid, INT32 targetPid, char *action,
