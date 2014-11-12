@@ -26,7 +26,9 @@ MessageBox *BroadcastMessageBox = NULL;
 
 PidNode *PidEverExisted = NULL;
 
-INT32 LockingResult[4] = { 0, 0, 0, 0 };
+INT32 LockingResult[5] = { 0, 0, 0, 0, 0 };
+
+INT32 DiskOccupation[2] = { -1, -1 };
 
 bool InterruptFinished = true;
 
@@ -114,7 +116,6 @@ void suspendProcess(INT32 pid, INT32 *errCode) {
 		*errCode = ERR_BAD_PARAM;
 		return;
 	} else {
-//		getLock("INTERRUPT", USER);
 		RSQueueNode *p = NULL;
 //		check queues for the pid, move to SuspendQueue or simply label as "Suspended"
 		getMyLock(READYQUEUELOCK);
@@ -631,62 +632,105 @@ void receiveMessage(INT32 sender, char *messageBuffer, INT32 receiveLength,
 	}
 }
 
-void readFromDisk(INT16 disk_id, INT16 sector, char *data) {
-
-}
-
-void writeToDisk(INT16 disk_id, INT16 sector, char *data) {
-
+void requestForDisk(INT16 action, INT32 disk_id, INT32 sector, char *data) {
+	char op[7];
+	DiskQueueNode *node = (DiskQueueNode *) calloc(1, sizeof(DiskQueueNode));
+	node->next = NULL;
+	if (action == SYSNUM_DISK_READ) {
+		sprintf(op, "Disk_R");
+		node->action = READ;
+	} else if (action == SYSNUM_DISK_WRITE) {
+		sprintf(op, "Disk_W");
+		node->action = WRITE;
+	}
+	node->disk_id = disk_id;
+	node->sector = sector;
+	node->data = data;
+	node->pcb = currentPCB;
+	getMyLock(DISKQUEUELOCK);
+	addToDiskQueue(node);
+//	releaseMyLock(DISKQUEUELOCK);
+	if (node == DiskQueue) {
+		DiskOccupation[disk_id - 1] = currentPCB->pid;
+		MEM_WRITE(Z502DiskSetID, &node->disk_id);
+		MEM_WRITE(Z502DiskSetSector, &node->sector);
+		MEM_WRITE(Z502DiskSetBuffer, (INT32 * )node->data);
+		MEM_WRITE(Z502DiskSetAction, (INT32 * )(&node->action));
+		INT32 Start = 0;
+		MEM_WRITE(Z502DiskStart, &Start);
+	}
+	releaseMyLock(DISKQUEUELOCK);
+	dispatch("Disk_R", -1);
+	Z502SwitchContext(SWITCH_CONTEXT_SAVE_MODE,
+			(void *) (&currentPCB->context));
 }
 
 void dispatch(char *op, INT32 time) {
-	PCB *pcb = NULL;
+//	PCB *pcb = NULL;
 	getMyLock(READYQUEUELOCK);
-	getMyLock(TIMERQUEUELOCK);
+//	getMyLock(TIMERQUEUELOCK);
 //If ReadyQueue is not null, pick the first one
 	if (ReadyQueue) {
 //		printf("%s: Pid now to %d from ReadyQueue\n", op, currentPCB->pid);
 		RSQueueNode *p = ReadyQueue;
-		pcb = p->pcb;
+//		pcb = p->pcb;
 		ReadyQueue = ReadyQueue->next;
 		if (ReadyQueue) {
 			ReadyQueue->previous = NULL;
 		}
-		free(p);
-		releaseMyLock(TIMERQUEUELOCK);
+		p->previous = p->next = NULL;
+//		releaseMyLock(TIMERQUEUELOCK);
 		releaseMyLock(READYQUEUELOCK);
-		schedulerPrinter(currentPCB->pid, pcb->pid, op, time);
-		currentPCB = pcb;
+		schedulerPrinter(currentPCB->pid, p->pcb->pid, op, time);
+		currentPCB = p->pcb;
+		free(p);
 	} else {
 //	if the timer queue is  not null, pick the first "NOT_SUSPEND one"
 //	and waits until it appears in the ReadyQueue
-		if (TimerQueue) {
-			TimerQueueNode *p = TimerQueue;
-			RSQueueNode *q = ReadyQueue;
-
-			while (p) {
-				if (p->pcb->suspended == NOT_SUSPENDED) {
-					pcb = p->pcb;
-					break;
-				}
-			}
-			while ((q = searchInRSQueue(pcb->pid, ReadyQueue)) == NULL) {
+		getMyLock(TIMERQUEUELOCK);
+		getMyLock(DISKQUEUELOCK);
+		if (TimerQueue || DiskQueue) {
+//			TimerQueueNode *p = TimerQueue;
+			RSQueueNode *q = NULL;
+////			RSQueueNode *q = ReadyQueue;
+//			while (p) {
+//				if (p->pcb->suspended == NOT_SUSPENDED) {
+//					pcb = p->pcb;
+//					break;
+//				}
+//			}
+//			while ((q = searchInRSQueue(pcb->pid, ReadyQueue)) == NULL) {
+//				releaseMyLock(TIMERQUEUELOCK);
+//				releaseMyLock(READYQUEUELOCK);
+//				InterruptFinished = false;
+//				Z502Idle();
+////			keep waiting until the interrupt handler finishes
+//				while (!InterruptFinished)
+//					;
+//				getMyLock(READYQUEUELOCK);
+//				getMyLock(TIMERQUEUELOCK);
+//			}
+			while ((TimerQueue || DiskQueue) && (!ReadyQueue)) {
+				InterruptFinished = false;
+				releaseMyLock(DISKQUEUELOCK);
 				releaseMyLock(TIMERQUEUELOCK);
 				releaseMyLock(READYQUEUELOCK);
-				InterruptFinished = false;
 				Z502Idle();
-//			keep waiting until the interrupt handler finishes
+				//			keep waiting until the interrupt handler finishes
 				while (!InterruptFinished)
 					;
 				getMyLock(READYQUEUELOCK);
 				getMyLock(TIMERQUEUELOCK);
+				getMyLock(DISKQUEUELOCK);
 			}
+			releaseMyLock(DISKQUEUELOCK);
 			releaseMyLock(TIMERQUEUELOCK);
-			removeFromRSQueue(pcb->pid, &ReadyQueue, &q);
+//			removeFromRSQueue(pcb->pid, &ReadyQueue, &q);
+			removeFromRSQueue(ReadyQueue->pcb->pid, &ReadyQueue, &q);
 			releaseMyLock(READYQUEUELOCK);
+			schedulerPrinter(currentPCB->pid, q->pcb->pid, op, time);
+			currentPCB = q->pcb;
 			free(q);
-			schedulerPrinter(currentPCB->pid, pcb->pid, op, time);
-			currentPCB = pcb;
 		} else {
 			Z502Halt();
 		}
@@ -861,6 +905,19 @@ void addToSuspendQueue(RSQueueNode *node) {
 	SuspendQueue = node;
 }
 
+void addToDiskQueue(DiskQueueNode *node) {
+	if (!DiskQueue) {
+		DiskQueue = node;
+		return;
+	}
+	DiskQueueNode *p = DiskQueue;
+	while (p->next) {
+		p = p->next;
+	}
+	p->next = node;
+	node->previous = p;
+}
+
 void addMessageBox(INT32 receiver) {
 	MessageBox *newBox = (MessageBox *) calloc(1, sizeof(MessageBox));
 	newBox->recipient = receiver;
@@ -962,13 +1019,17 @@ void killPid(INT32 pid) {
 }
 
 void getMyLock(INT32 type) {
-	READ_MODIFY((INT32 )(MEMORY_INTERLOCK_BASE + 128 + type), 1, (BOOL )1,
+	READ_MODIFY((INT32)(MEMORY_INTERLOCK_BASE + 16 + type), 1, (BOOL )1,
 			&LockingResult[type]);
 }
 
 void releaseMyLock(INT32 type) {
-	READ_MODIFY((INT32 )(MEMORY_INTERLOCK_BASE + 128+ type), 0, (BOOL )1,
+	READ_MODIFY((INT32)(MEMORY_INTERLOCK_BASE + 16 + type), 0, (BOOL )0,
 			&LockingResult[type]);
+	if (LockingResult[type] != 1) {
+		READ_MODIFY((INT32)(MEMORY_INTERLOCK_BASE + 16 + type), 0, (BOOL )1,
+				&LockingResult[type]);
+	}
 }
 
 void schedulerPrinter(INT32 currentPid, INT32 targetPid, char *action,
@@ -976,6 +1037,7 @@ void schedulerPrinter(INT32 currentPid, INT32 targetPid, char *action,
 	INT32 currentTime;
 	TimerQueueNode *pT = NULL;
 	RSQueueNode *pR = NULL, *pS = NULL;
+	DiskQueueNode *pD = NULL;
 	PidNode *pP = NULL;
 
 	getMyLock(PRINTERLOCK);
@@ -992,6 +1054,7 @@ void schedulerPrinter(INT32 currentPid, INT32 targetPid, char *action,
 
 	getMyLock(READYQUEUELOCK);
 	getMyLock(TIMERQUEUELOCK);
+	getMyLock(DISKQUEUELOCK);
 	getMyLock(SUSPENDQUEUELOCK);
 
 //	print the ReadyQueue
@@ -1002,13 +1065,21 @@ void schedulerPrinter(INT32 currentPid, INT32 targetPid, char *action,
 	}
 	releaseMyLock(READYQUEUELOCK);
 
-//	print the Timerqueue
+//	print the TimerQueue
 	pT = TimerQueue;
 	while (pT) {
 		SP_setup(SP_TIMER_SUSPENDED_MODE, pT->pcb->pid);
 		pT = pT->next;
 	}
 	releaseMyLock(TIMERQUEUELOCK);
+
+//	print the DiskQueue
+	pD = DiskQueue;
+	while (pD) {
+		SP_setup(SP_DISK_SUSPENDED_MODE, pD->pcb->pid);
+		pD = pD->next;
+	}
+	releaseMyLock(DISKQUEUELOCK);
 
 //	print the SuspendQueue
 	pS = SuspendQueue;

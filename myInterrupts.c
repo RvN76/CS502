@@ -35,15 +35,12 @@ void timerInterrupt() {
 		node->pcb = pcb;
 		node->next = node->previous = NULL;
 		if (pcb->suspended == NOT_SUSPENDED) {
-			//			getMyLock(READYQUEUELOCK);
 			addToReadyQueue(node);
-			//			releaseMyLock(READYQUEUELOCK);
 		} else {
 			getMyLock(SUSPENDQUEUELOCK);
 			addToSuspendQueue(node);
 			releaseMyLock(SUSPENDQUEUELOCK);
 		}
-		//		getMyLock(TIMERQUEUELOCK);
 	}
 	//	reset the timer
 	if (TimerQueue) {
@@ -51,12 +48,64 @@ void timerInterrupt() {
 	}
 	releaseMyLock(TIMERQUEUELOCK);
 	releaseMyLock(READYQUEUELOCK);
-	schedulerPrinter(currentPCB->pid, currentPCB->pid, "INTER", currentTime);
+//	schedulerPrinter(currentPCB->pid, currentPCB->pid, "INT_T", currentTime);
 	InterruptFinished = true;
-	return;
 	//	printf("interrupt finished\n");
 }
 
-void diskInterrupt() {
-
+void diskInterrupt(INT32 disk_id) {
+	DiskQueueNode *p = NULL, *p1 = NULL;
+	getMyLock(READYQUEUELOCK);
+	getMyLock(DISKQUEUELOCK);
+	DiskOccupation[disk_id - 1] = -1;
+	p = DiskQueue;
+	while (p) {
+		if (p->disk_id == disk_id) {
+			if (p == DiskQueue) {
+				DiskQueue = p->next;
+				if (DiskQueue) {
+					DiskQueue->previous = NULL;
+				}
+			} else {
+				p->previous->next = p->next;
+				if (p->next) {
+					p->next->previous = p->previous;
+				}
+			}
+			break;
+		}
+		p = p->next;
+	}
+	p1 = p->next;
+	p->previous = p->next = NULL;
+	releaseMyLock(DISKQUEUELOCK);
+	PCB *pcb = p->pcb;
+	free(p);
+	RSQueueNode *node = (RSQueueNode *) calloc(1, sizeof(RSQueueNode));
+	node->previous = node->next = NULL;
+	node->pcb = pcb;
+	addToReadyQueue(node);
+	getMyLock(DISKQUEUELOCK);
+	releaseMyLock(READYQUEUELOCK);
+	while (p1) {
+		if (p1->disk_id == disk_id) {
+			break;
+		}
+		p1 = p1->next;
+	}
+	if (!p1 && DiskOccupation[2 - disk_id] == -1 && DiskQueue) {
+		p1 = DiskQueue;
+	}
+	if (p1) {
+		DiskOccupation[p1->disk_id - 1] = p1->pcb->pid;
+		MEM_WRITE(Z502DiskSetID, &p1->disk_id);
+		MEM_WRITE(Z502DiskSetSector, &p1->sector);
+		MEM_WRITE(Z502DiskSetBuffer, (INT32 * )p1->data);
+		MEM_WRITE(Z502DiskSetAction, (INT32 * )&p1->action);
+		INT32 Start = 0;
+		MEM_WRITE(Z502DiskStart, &Start);
+	}
+	releaseMyLock(DISKQUEUELOCK);
+//	schedulerPrinter(currentPCB->pid, currentPCB->pid, "INT_D", -1);
+	InterruptFinished = true;
 }

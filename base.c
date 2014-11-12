@@ -75,7 +75,7 @@ void interrupt_handler(void) {
 		break;
 	case DISK_INTERRUPT_DISK1 :
 	case DISK_INTERRUPT_DISK2 :
-		diskInterrupt();
+		diskInterrupt(device_id - 4);
 		break;
 	default:
 		break;
@@ -224,13 +224,16 @@ void svc(SYSTEM_CALL_DATA *SystemCallData) {
 		break;
 //	Call to read from disk
 	case SYSNUM_DISK_READ:
-		readFromDisk((INT32) SystemCallData->Argument[0],
-				(INT32) SystemCallData->Argument[1],
-				(char *) SystemCallData->Argument[2]);
-		break;
+//		readFromDisk((INT32) SystemCallData->Argument[0],
+//				(INT32) SystemCallData->Argument[1],
+//				(char *) SystemCallData->Argument[2]);
+//		break;
 //	Call to write to disk
 	case SYSNUM_DISK_WRITE:
-		writeToDisk((INT32) SystemCallData->Argument[0],
+//		writeToDisk((INT32) SystemCallData->Argument[0],
+//				(INT32) SystemCallData->Argument[1],
+//				(char *) SystemCallData->Argument[2]);
+		requestForDisk(call_type, (INT32) SystemCallData->Argument[0],
 				(INT32) SystemCallData->Argument[1],
 				(char *) SystemCallData->Argument[2]);
 		break;

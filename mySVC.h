@@ -31,10 +31,11 @@
 
 #define READYQUEUELOCK		0
 #define TIMERQUEUELOCK		1
-#define SUSPENDQUEUELOCK	2
-#define PRINTERLOCK			3
+#define DISKQUEUELOCK		2
+#define SUSPENDQUEUELOCK	3
+#define PRINTERLOCK			4
 
-INT32 LockingResult[4];
+INT32 LockingResult[5];
 
 typedef struct pNode {
 	INT32 pid;
@@ -82,9 +83,10 @@ typedef struct rNode {
 typedef struct dNode {
 	PCB *pcb;
 	bool action;
-	INT16 disk_id;
-	INT16 sector;
+	INT32 disk_id;
+	INT32 sector;
 	char *data;
+	struct dNode *previous;
 	struct dNode *next;
 } DiskQueueNode;
 
@@ -101,12 +103,9 @@ PidNode *PidEverExisted;
 MessageBox *MessageBoxQueue;
 MessageBox *BroadcastMessageBox;
 
-//INT32 prioritiveProcess;
-//bool tryingToHandle[2];
+INT32 DiskOccupation[2];
 
 bool InterruptFinished;
-
-//char operation[64];
 
 void osCreateProcess(void *);
 
@@ -128,9 +127,7 @@ void sendMessage(INT32, char *, INT32, INT32 *);
 
 void receiveMessage(INT32, char *, INT32, INT32 *, INT32 *, INT32 *);
 
-void readFromDisk(INT16, INT16, char *);
-
-void writeToDisk(INT16, INT16, char *);
+void requestForDisk(INT16, INT32, INT32, char *);
 
 void dispatch();
 
@@ -151,6 +148,8 @@ void addToSuspendQueue(RSQueueNode *);
 RSQueueNode *searchInRSQueue(INT32, RSQueueNode *);
 
 void removeFromRSQueue(INT32, RSQueueNode **, RSQueueNode **);
+
+void addToDiskQueue(DiskQueueNode *);
 
 void addMessageBox(INT32);
 

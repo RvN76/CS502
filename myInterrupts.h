@@ -8,8 +8,10 @@
 #ifndef MYINTERRUPTS_H_
 #define MYINTERRUPTS_H_
 
+#include "global.h"
+
 void timerInterrupt();
 
-void diskInterrupt();
+void diskInterrupt(INT32);
 
 #endif /* MYINTERRUPTS_H_ */
