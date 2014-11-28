@@ -61,6 +61,7 @@ void diskInterrupt(INT32 disk_id) {
 	p = DiskQueue;
 	while (p) {
 		if (p->disk_id == disk_id) {
+			p1 = p->next;
 			if (p == DiskQueue) {
 				DiskQueue = p->next;
 				if (DiskQueue) {
@@ -76,36 +77,30 @@ void diskInterrupt(INT32 disk_id) {
 		}
 		p = p->next;
 	}
-	p1 = p->next;
+
 	p->previous = p->next = NULL;
-	releaseMyLock(DISKQUEUELOCK);
+//	releaseMyLock(DISKQUEUELOCK);
 	PCB *pcb = p->pcb;
 	free(p);
 	RSQueueNode *node = (RSQueueNode *) calloc(1, sizeof(RSQueueNode));
 	node->previous = node->next = NULL;
 	node->pcb = pcb;
 	addToReadyQueue(node);
-	getMyLock(DISKQUEUELOCK);
+//	getMyLock(DISKQUEUELOCK);
 	releaseMyLock(READYQUEUELOCK);
 	while (p1) {
 		if (p1->disk_id == disk_id) {
+			DiskOccupation[disk_id - 1] = p1->pcb->pid;
+			MEM_WRITE(Z502DiskSetID, &p1->disk_id);
+			MEM_WRITE(Z502DiskSetSector, &p1->sector);
+			MEM_WRITE(Z502DiskSetBuffer, (INT32 * )p1->data);
+			MEM_WRITE(Z502DiskSetAction, (INT32 * )(&p1->action));
+			INT32 Start = 0;
+			MEM_WRITE(Z502DiskStart, &Start);
 			break;
 		}
 		p1 = p1->next;
 	}
-	if (!p1 && DiskOccupation[2 - disk_id] == -1 && DiskQueue) {
-		p1 = DiskQueue;
-	}
-	if (p1) {
-		DiskOccupation[p1->disk_id - 1] = p1->pcb->pid;
-		MEM_WRITE(Z502DiskSetID, &p1->disk_id);
-		MEM_WRITE(Z502DiskSetSector, &p1->sector);
-		MEM_WRITE(Z502DiskSetBuffer, (INT32 * )p1->data);
-		MEM_WRITE(Z502DiskSetAction, (INT32 * )&p1->action);
-		INT32 Start = 0;
-		MEM_WRITE(Z502DiskStart, &Start);
-	}
 	releaseMyLock(DISKQUEUELOCK);
-//	schedulerPrinter(currentPCB->pid, currentPCB->pid, "INT_D", -1);
 	InterruptFinished = true;
 }

@@ -75,6 +75,12 @@ void interrupt_handler(void) {
 		break;
 	case DISK_INTERRUPT_DISK1 :
 	case DISK_INTERRUPT_DISK2 :
+	case DISK_INTERRUPT_DISK1 + 2:
+	case DISK_INTERRUPT_DISK1 + 3:
+	case DISK_INTERRUPT_DISK1 + 4:
+	case DISK_INTERRUPT_DISK1 + 5:
+	case DISK_INTERRUPT_DISK1 + 6:
+	case DISK_INTERRUPT_DISK1 + 7:
 		diskInterrupt(device_id - 4);
 		break;
 	default:
@@ -100,8 +106,8 @@ void fault_handler(void) {
 	// Now read the status of this device
 	MEM_READ(Z502InterruptStatus, &status);
 
-	printf("Fault_handler: Found vector type %d with value %d\n", device_id,
-			status);
+//	printf("Fault_handler: Found vector type %d with value %d\n", device_id,
+//			status);
 	// Clear out this device - we're done with it
 	MEM_WRITE(Z502InterruptClear, &Index);
 
@@ -113,18 +119,28 @@ void fault_handler(void) {
 		terminateProcess(-1, &termResult);
 		break;
 	case INVALID_MEMORY :
+//		if (!InvertedPageTable) {
+//			InvertedPageTable = (FrameAssignmentNode **) calloc(
+//			PHYS_MEM_PGS, sizeof(FrameAssignmentNode *));
+//		}
 		if (!Z502_PAGE_TBL_ADDR) {
-			Z502_PAGE_TBL_ADDR = (UINT16 *) calloc(VIRTUAL_MEM_PAGES,
+			currentPCB->pageTable = (UINT16 *) calloc(VIRTUAL_MEM_PAGES,
 					sizeof(UINT16));
+			currentPCB->pageTableLength = VIRTUAL_MEM_PAGES;
+			Z502_PAGE_TBL_ADDR = currentPCB->pageTable;
 			Z502_PAGE_TBL_LENGTH = VIRTUAL_MEM_PAGES;
 		}
-		if (status >= Z502_PAGE_TBL_LENGTH || status < 0) {
+		if (status < Z502_PAGE_TBL_LENGTH && status >= 0) {
+			if ((currentPCB->pageTable[status] & PTBL_ON_DISK_BIT) == 0) {
+				allocatePage(status);
+			} else {
+				getThePageFromDisk(status);
+			}
+		} else {
 			printf("Invalid page number: %d\n", status);
 			printf("Terminate current process\n");
 			INT32 termResult;
 			terminateProcess(-1, &termResult);
-		} else {
-			initializeSlot(status);
 		}
 		break;
 	}
@@ -141,6 +157,11 @@ void fault_handler(void) {
  allows the user to see what's happening, but doesn't overwhelm
  with the amount of data.
  ************************************************************************/
+
+typedef union {
+	char char_data[PGSIZE ];
+	UINT32 int_data[PGSIZE / sizeof(int)];
+} DISK_DATA;
 
 void svc(SYSTEM_CALL_DATA *SystemCallData) {
 	short call_type;
@@ -227,15 +248,22 @@ void svc(SYSTEM_CALL_DATA *SystemCallData) {
 //		readFromDisk((INT32) SystemCallData->Argument[0],
 //				(INT32) SystemCallData->Argument[1],
 //				(char *) SystemCallData->Argument[2]);
+//		requestForDisk(call_type, (INT32) SystemCallData->Argument[0],
+//				(INT32) SystemCallData->Argument[1],
+//				(char *) SystemCallData->Argument[2]);
 //		break;
 //	Call to write to disk
 	case SYSNUM_DISK_WRITE:
 //		writeToDisk((INT32) SystemCallData->Argument[0],
 //				(INT32) SystemCallData->Argument[1],
 //				(char *) SystemCallData->Argument[2]);
+//	{
+//		DISK_DATA *d = (DISK_DATA *) calloc(1, sizeof(DISK_DATA));
+//		memcpy(d->char_data, (char *) SystemCallData->Argument[2], 16);
 		requestForDisk(call_type, (INT32) SystemCallData->Argument[0],
 				(INT32) SystemCallData->Argument[1],
 				(char *) SystemCallData->Argument[2]);
+//	}
 		break;
 //	other cases: report
 	default:

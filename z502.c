@@ -241,9 +241,6 @@ void MemoryCommon(INT32 VirtualAddress, char *data_ptr, BOOL read_or_write) {
 
     page_is_valid = FALSE;
 
-    printf("page number: %d\n", VirtualPageNumber);
-    fflush(stdout);
-
     /*  Loop until the virtual page passes all the tests        */
 
     while (page_is_valid == FALSE ) {
@@ -1005,6 +1002,7 @@ void HardwareTimer(INT32 time_to_delay) {
             TIMER_INTERRUPT, (INT16) ERR_SUCCESS, &timer_state.event_ptr);
     timer_state.timer_in_use = TRUE;
     ChargeTimeAndCheckEvents(COST_OF_TIMER);
+
 }                                       // End of HardwareTimer  
 
 /*****************************************************************
@@ -1318,9 +1316,9 @@ void Z502SwitchContext(BOOL kill_or_save, void **IncomingContextPointer) {
     Z502_PAGE_TBL_ADDR = curr_ptr->page_table_ptr;
     Z502_PAGE_TBL_LENGTH = curr_ptr->page_table_len;
     Z502_MODE = curr_ptr->program_mode;
-	if (Z502_MODE != KERNEL_MODE) {
-		Z502_MODE = Z502_MODE;
-	}
+    if (Z502_MODE != KERNEL_MODE ){
+Z502_MODE = Z502_MODE;
+}
     Z502_REG1 = curr_ptr->reg1;
     Z502_REG2 = curr_ptr->reg2;
     Z502_REG3 = curr_ptr->reg3;

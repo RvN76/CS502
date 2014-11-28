@@ -10,7 +10,7 @@
  and long.  Add incls for
  scheduler_printer.
  1.2 Dec 1991;           Allow interrupts to occur in user code and in CALL
-                         statements.
+ statements.
  1.5 Aug 1993;           Add READ_MODIFY & DEFINE_SHARED_AREA support.
  2.0 Jan 2000;           Small changes
  2.1 May 2001;           Fix STEP macro.  DISK macros.
@@ -50,12 +50,11 @@
 // is used as an argument to call SVC.
 
 #define         MAX_NUMBER_ARGUMENTS                   8
-typedef struct    {
-    int  NumberOfArguments;          // This includes the System Call Number
-    int  SystemCallNumber;
-    long *Argument[MAX_NUMBER_ARGUMENTS];
+typedef struct {
+	int NumberOfArguments;          // This includes the System Call Number
+	int SystemCallNumber;
+	long *Argument[MAX_NUMBER_ARGUMENTS];
 } SYSTEM_CALL_DATA;
-
 
 extern void ChargeTimeAndCheckEvents(INT32);
 extern int BaseThread();
@@ -84,15 +83,12 @@ extern int BaseThread();
  * defined here.  It greatly improves the readability of the code.
  */
 
-
 #define    MEM_READ( arg1, arg2 )    Z502MemoryRead( arg1, (INT32 *)arg2 )
 
 #define    MEM_WRITE( arg1, arg2 )   Z502MemoryWrite( arg1, (INT32 *)arg2 )
 
 #define    READ_MODIFY( arg1, arg2, arg3, arg4 )                               \
 	         Z502MemoryReadModify( arg1, arg2, arg3, arg4 )
-
-
 
 #define         GET_TIME_OF_DAY( arg1 )      {                                 \
                 SYSTEM_CALL_DATA *SystemCallData =                             \
@@ -212,7 +208,6 @@ extern int BaseThread();
                 Z502_MODE = USER_MODE;                                         \
                 free(SystemCallData);                                          \
                 }                                                              \
-
 
 
 #define         SEND_MESSAGE( arg1, arg2, arg3, arg4 )   {                     \

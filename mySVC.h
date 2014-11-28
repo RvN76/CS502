@@ -20,6 +20,7 @@
 #define	NOT_SUSPENDED		0
 #define WAITING_FOR_MESSAGE	1
 #define	SUSPENDED			2
+#define WAITING_FOR_DISK	3
 
 #define LEGAL_PRIORITY_UPPER_BOUND	100
 
@@ -65,6 +66,8 @@ typedef struct {
 	INT32 suspended;
 	Z502CONTEXT *context;
 	MessageBox *messageBox;
+	UINT16 *pageTable;
+	INT16 pageTableLength;
 } PCB;
 
 typedef struct tNode {
@@ -103,7 +106,7 @@ PidNode *PidEverExisted;
 MessageBox *MessageBoxQueue;
 MessageBox *BroadcastMessageBox;
 
-INT32 DiskOccupation[2];
+INT32 DiskOccupation[8];
 
 bool InterruptFinished;
 

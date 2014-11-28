@@ -5,45 +5,101 @@
  *      Author: Dongyun
  */
 
+#include "global.h"
+#include "syscalls.h"
+#include "protos.h"
 #include "memoryManager.h"
 #include "mySVC.h"
+
 #include "string.h"
 #include "stdlib.h"
 
-FrameAssignmentNode *addressList = NULL;
+FrameAssignmentNode *InvertedPageTable[PHYS_MEM_PGS];
 
-extern UINT16 *Z502_PAGE_TBL_ADDR;
-
-void initializeSlot(INT32 slot) {
-	FrameAssignmentNode *node = (FrameAssignmentNode *) calloc(1, sizeof(FrameAssignmentNode));
-	node->pid = currentPCB->pid;
-	node->next = NULL;
-	if (!addressList) {
-		node->frame = 0;
-		addressList = node;
-	} else {
-		FrameAssignmentNode *p = addressList;
-		if (!p->next) {
-			node->frame = p->frame + 1;
-			p->next = node;
-		} else {
-			while (p->next) {
-				if (p->next->frame - p->frame > 1) {
-					node->frame = p->frame + 1;
-					node->next = p->next;
-					p->next = node;
-					break;
-				} else {
-					p = p->next;
-				}
+void allocatePage(INT32 page) {
+	while (true) {
+		INT32 i;
+		for (i = 0; i < PHYS_MEM_PGS ; i++) {
+			if (!(InvertedPageTable[i])) {
+				FrameAssignmentNode *node = (FrameAssignmentNode *) calloc(1,
+						sizeof(FrameAssignmentNode));
+				node->pid = currentPCB->pid;
+				node->pageTable = currentPCB->pageTable;
+				node->page = page;
+				InvertedPageTable[i] = node;
+				currentPCB->pageTable[page] = i | PTBL_VALID_BIT;
+				return;
 			}
-			if (!p->next) {
-				node->frame = p->frame + 1;
-				p->next = node;
+		}
+		INT32 victim = chooseAndReset();
+		INT32 disk = (InvertedPageTable[victim]->pid + 1) % MAX_NUMBER_OF_DISKS;
+		INT32 sector = InvertedPageTable[victim]->page;
+//		INT32 disk = ((InvertedPageTable[victim]->pid * 1024
+//				+ InvertedPageTable[victim]->page) / NUM_LOGICAL_SECTORS ) + 1;
+//		INT32 sector = (InvertedPageTable[victim]->pid * 1024
+//				+ InvertedPageTable[victim]->page)
+//				- (disk - 1) * NUM_LOGICAL_SECTORS;
+		char *buffer = (char *) calloc(PGSIZE, sizeof(char));
+		Z502ReadPhysicalMemory(victim, buffer);
+		InvertedPageTable[victim]->pageTable[InvertedPageTable[victim]->page] =
+		PTBL_ON_DISK_BIT;
+		free(InvertedPageTable[victim]);
+		InvertedPageTable[victim] = NULL;
+		requestForDisk(SYSNUM_DISK_WRITE, disk, sector, buffer);
+//	FrameAssignmentNode *p = InvertedPageTable[victim];
+//	free(buffer);
+//	buffer = (char *) calloc(PGSIZE, sizeof(char));
+//	Z502WritePhysicalMemory(victim, buffer);
+//	p->pid = currentPCB->pid;
+//	p->pageTable = currentPCB->pageTable;
+//	p->page = page;
+//	currentPCB->pageTable[page] = victim | PTBL_VALID_BIT;
+	}
+}
+
+void getThePageFromDisk(INT32 page) {
+	char *buffer = (char *) calloc(PGSIZE, sizeof(char));
+	INT32 disk = (currentPCB->pid + 1) % MAX_NUMBER_OF_DISKS;
+	INT32 sector = page;
+//	INT32 disk = ((currentPCB->pid * 1024 + page) / NUM_LOGICAL_SECTORS ) + 1;
+//	INT32 sector = (currentPCB->pid * 1024 + page)
+//			- (disk - 1) * NUM_LOGICAL_SECTORS;
+	requestForDisk(SYSNUM_DISK_READ, disk, sector, buffer);
+	currentPCB->pageTable[page] = 0;
+	allocatePage(page);
+	Z502WritePhysicalMemory(currentPCB->pageTable[page] & PTBL_PHYS_PG_NO,
+			buffer);
+}
+
+INT32 chooseAndReset() {
+	INT32 victim = -1;
+	INT32 i;
+	for (i = 0; i < PHYS_MEM_PGS ; i++) {
+		if ((InvertedPageTable[i]->pageTable[InvertedPageTable[i]->page]
+				& PTBL_REFERENCED_BIT) == 0) {
+			if (victim == -1) {
+				victim = i;
+			}
+			InvertedPageTable[i]->pageTable[InvertedPageTable[i]->page] &=
+					(PTBL_VALID_BIT | PTBL_MODIFIED_BIT | PTBL_PHYS_PG_NO);
+		}
+	}
+	if (victim == -1) {
+		for (i = 0; i < PHYS_MEM_PGS ; i++) {
+			if ((InvertedPageTable[i]->pageTable[InvertedPageTable[i]->page]
+					& PTBL_MODIFIED_BIT) == 0) {
+				victim = i;
+				break;
 			}
 		}
 	}
-	Z502_PAGE_TBL_ADDR[slot] = node->frame | PTBL_VALID_BIT;
-//	Z502_PAGE_TBL_ADDR[slot] = pageTable[slot] | PTBL_VALID_BIT;
+	if (victim == -1) {
+		victim = 0;
+	}
+	return victim;
 }
 
+void selectDiskAndSector(INT32 victim, INT32 *disk, INT32 *sector) {
+	*disk = (InvertedPageTable[victim]->pid + 1) % MAX_NUMBER_OF_DISKS;
+	*sector = InvertedPageTable[victim]->page;
+}

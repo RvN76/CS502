@@ -11,14 +11,22 @@
 #include "global.h"
 #include "Z502.h"
 
-typedef struct ad {
+#define PTBL_ON_DISK_BIT	0x1000
+
+typedef struct {
 	INT32 pid;
-	UINT16 frame;
-	struct ad *next;
+	UINT16 *pageTable;
+	INT16 page;
 } FrameAssignmentNode;
 
-FrameAssignmentNode *addressList;
+FrameAssignmentNode *InvertedPageTable[PHYS_MEM_PGS ];
 
-void initializeSlot(INT32);
+void allocatePage(INT32);
+
+void getThePageFromDisk(INT32);
+
+INT32 chooseAndReset();
+
+void selectDiskAndSector(INT32, INT32 *, INT32 *);
 
 #endif /* MEMORYMANAGER_H_ */
