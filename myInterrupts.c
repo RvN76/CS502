@@ -93,8 +93,8 @@ void diskInterrupt(INT32 disk_id) {
 			DiskOccupation[disk_id - 1] = p1->pcb->pid;
 			MEM_WRITE(Z502DiskSetID, &p1->disk_id);
 			MEM_WRITE(Z502DiskSetSector, &p1->sector);
-			MEM_WRITE(Z502DiskSetBuffer, (INT32 * )p1->data);
-			MEM_WRITE(Z502DiskSetAction, (INT32 * )(&p1->action));
+			MEM_WRITE(Z502DiskSetBuffer, p1->data);
+			MEM_WRITE(Z502DiskSetAction, &p1->action);
 			INT32 Start = 0;
 			MEM_WRITE(Z502DiskStart, &Start);
 			break;

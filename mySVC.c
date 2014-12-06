@@ -213,25 +213,70 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 		pidToTerminate = pid;
 	}
 	switch (pidToTerminate) {
-	case -2:
+	case -2: {
+		int j, k;
+//		for (j = 0; j < 7; j++) {
+//			for (k = 0; k < 10; k++) {
+//				if (j * 10 + k < PHYS_MEM_PGS) {
+//					printf("%d\t", RoundDistribution[j * 10 + k]);
+//				}
+//
+//			}
+//			printf("\n");
+//		}
 		*errCode = ERR_SUCCESS;
 		Z502Halt();
+	}
 		break;
 	case -1:
 		*errCode = ERR_SUCCESS;
 		numOfProcesses--;
 		INT32 tPid = currentPCB->pid;
 //		decide what to run next
+//		int i, j;
+//		for (i = 0; i < VIRTUAL_MEM_PAGES; i++) {
+//			if (SwappedPageDistribution[i] != 0) {
+//				printf("%d:%d\t", i, SwappedPageDistribution[i]);
+//			}
+//			if (i + 1 >= 20 && (i + 1) % 20 == 0) {
+//				printf("\n");
+//			}
+//		}
+//		printf("\n");
 		dispatch("Term", -1);
 		killPid(tPid);
 		removeMessageBox(tPid);
-		int i;
-		for (i = 0; i < PHYS_MEM_PGS ; i++) {
-			if ((InvertedPageTable[i])
-					&& (InvertedPageTable[i]->pid == currentPCB->pid)) {
-				InvertedPageTable[i] = NULL;
-			}
-		}
+//		if (InvertedPageTable) {
+
+//		for (i = 0; i < 7; i++) {
+//			for (j = 0; j < 10; j++) {
+//				if (i * 10 + j < PHYS_MEM_PGS) {
+//					if (InvertedPageTable[i * 10 + j]) {
+//						printf("%d\t", InvertedPageTable[i * 10 + j]->pid);
+//					} else {
+//						printf("N/A\t");
+//					}
+//				}
+//			}
+//			printf("\n\n");
+//		}
+//		for (i = 0; i < PHYS_MEM_PGS ; i++) {
+//			if ((InvertedPageTable[i])
+//					&& (InvertedPageTable[i]->pid == currentPCB->pid)) {
+////				free(InvertedPageTable[i]);
+//				InvertedPageTable[i]->pid = -1;
+//				char *new_buffer = (char*) calloc(PGSIZE, sizeof(char));
+//				Z502WritePhysicalMemory(i, new_buffer);
+//			}
+//		}
+//		for (i = 0; i < VIRTUAL_MEM_PAGES; i++) {
+//			if ((currentPCB->pageTable[i] & PTBL_VALID_BIT) != 0) {
+//				InvertedPageTable[(currentPCB->pageTable[i] & PTBL_PHYS_PG_NO)] =
+//						NULL;
+//			}
+//		}
+//		}
+
 		Z502SwitchContext(SWITCH_CONTEXT_KILL_MODE,
 				(void *) (&currentPCB->context));
 		break;
@@ -680,8 +725,12 @@ void requestForDisk(INT16 action, INT32 disk_id, INT32 sector, char *data) {
 
 	} else if (action == SYSNUM_DISK_WRITE) {
 		sprintf(op, "Disk_W");
-		node->data = (char *) calloc(PGSIZE, sizeof(char));
-		memcpy(node->data, data, PGSIZE);
+//		char temp[16];
+//		strncpy(temp, data, 16);
+//		node->data = (char *) calloc(PGSIZE, sizeof(char));
+		node->data = data;
+//		strncpy(node->data, data, 16);
+//		memcpy(node->data,data,PGSIZE);
 		node->action = WRITE;
 	}
 	node->disk_id = disk_id;
@@ -692,8 +741,8 @@ void requestForDisk(INT16 action, INT32 disk_id, INT32 sector, char *data) {
 		DiskOccupation[disk_id - 1] = currentPCB->pid;
 		MEM_WRITE(Z502DiskSetID, &node->disk_id);
 		MEM_WRITE(Z502DiskSetSector, &node->sector);
-		MEM_WRITE(Z502DiskSetBuffer, (INT32 * )(node->data));
-		MEM_WRITE(Z502DiskSetAction, (INT32 * )(&node->action));
+		MEM_WRITE(Z502DiskSetBuffer, node->data);
+		MEM_WRITE(Z502DiskSetAction, &node->action);
 		INT32 Start = 0;
 		MEM_WRITE(Z502DiskStart, &Start);
 	}

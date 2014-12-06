@@ -27,8 +27,8 @@
 #define MESSAGE_BOX_CAPACITY		8
 #define MESSAGE_LENGTH_UPPERBOUND	64
 
-#define READ 	(BOOL)0
-#define WRITE	(BOOL)1
+#define READ 	0
+#define WRITE	1
 
 #define READYQUEUELOCK		0
 #define TIMERQUEUELOCK		1
@@ -85,7 +85,7 @@ typedef struct rNode {
 
 typedef struct dNode {
 	PCB *pcb;
-	bool action;
+	INT32 action;
 	INT32 disk_id;
 	INT32 sector;
 	char *data;

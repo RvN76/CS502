@@ -21,6 +21,14 @@ typedef struct {
 
 FrameAssignmentNode *InvertedPageTable[PHYS_MEM_PGS ];
 
+UINT16 RoundsUnreferenced[PHYS_MEM_PGS ];
+
+INT32 MostUnluckyVictim;
+
+INT32 RoundDistribution[PHYS_MEM_PGS ];
+
+INT32 SwappedPageDistribution[VIRTUAL_MEM_PAGES];
+
 void allocatePage(INT32);
 
 void getThePageFromDisk(INT32);

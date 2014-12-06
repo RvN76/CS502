@@ -122,6 +122,8 @@ void fault_handler(void) {
 //		if (!InvertedPageTable) {
 //			InvertedPageTable = (FrameAssignmentNode **) calloc(
 //			PHYS_MEM_PGS, sizeof(FrameAssignmentNode *));
+//			RoundsUnreferenced = (UINT16 *) calloc(PHYS_MEM_PGS,
+//					sizeof(UINT16));
 //		}
 		if (!Z502_PAGE_TBL_ADDR) {
 			currentPCB->pageTable = (UINT16 *) calloc(VIRTUAL_MEM_PAGES,
@@ -131,7 +133,7 @@ void fault_handler(void) {
 			Z502_PAGE_TBL_LENGTH = VIRTUAL_MEM_PAGES;
 		}
 		if (status < Z502_PAGE_TBL_LENGTH && status >= 0) {
-			if ((currentPCB->pageTable[status] & PTBL_ON_DISK_BIT) == 0) {
+			if ((currentPCB->pageTable[status] & PTBL_MODIFIED_BIT) == 0) {
 				allocatePage(status);
 			} else {
 				getThePageFromDisk(status);
