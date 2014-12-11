@@ -35,7 +35,7 @@ void allocatePage(INT32 page) {
 				node->pageTable = currentPCB->pageTable;
 				node->page = page;
 				InvertedPageTable[i] = node;
-				char *new_buffer = (char*) calloc(PGSIZE, sizeof(char));
+				char *new_buffer = (char *) calloc(PGSIZE, sizeof(char));
 				Z502WritePhysicalMemory(i, new_buffer);
 				currentPCB->pageTable[page] = i | PTBL_VALID_BIT;
 				RoundsUnreferenced[i] = 0;
@@ -47,49 +47,30 @@ void allocatePage(INT32 page) {
 		PTBL_MODIFIED_BIT;
 		RoundsUnreferenced[i] = 0;
 		SwappedPageDistribution[InvertedPageTable[victim]->page]++;
-//		INT32 disk, sector;
-//		sector = InvertedPageTable[victim]->page;
-//		if ((InvertedPageTable[victim]->page) < 64) {
-//			disk = ((InvertedPageTable[victim]->pid + 0) % MAX_NUMBER_OF_DISKS )
-//					+ 1;
-//		} else {
-//			disk = ((InvertedPageTable[victim]->pid + 1) % MAX_NUMBER_OF_DISKS )
-//					+ 1;
-//		}
 
-//		INT32 disk = (InvertedPageTable[victim]->pid + 1
-//				+ InvertedPageTable[victim]->page / 16) % MAX_NUMBER_OF_DISKS;
-//		INT32 sector = InvertedPageTable[victim]->page;
-//		INT32 disk = (InvertedPageTable[victim]->pid+6) % MAX_NUMBER_OF_DISKS;
 		INT32 disk = (InvertedPageTable[victim]->pid
-				+ InvertedPageTable[victim]->page / 16) % MAX_NUMBER_OF_DISKS
+				+ InvertedPageTable[victim]->page / 4) % MAX_NUMBER_OF_DISKS
 				+ 1;
 		INT32 sector = InvertedPageTable[victim]->page;
-		char *buffer = (char*) calloc(PGSIZE, sizeof(char));
+//		INT32 disk = (InvertedPageTable[victim]->pid % MAX_NUMBER_OF_DISKS )
+//				+ 1;
+//		INT32 sector = InvertedPageTable[victim]->page;
+		char *buffer = (char *) calloc(PGSIZE, sizeof(char));
 		Z502ReadPhysicalMemory(victim, buffer);
-//		free(InvertedPageTable[victim]);
+		free(InvertedPageTable[victim]);
 		InvertedPageTable[victim] = NULL;
-//		char *new_buffer = (char*) calloc(PGSIZE, sizeof(char));
-//		Z502WritePhysicalMemory(victim, new_buffer);
 		requestForDisk(SYSNUM_DISK_WRITE, disk, sector, buffer);
 	}
 }
 
 void getThePageFromDisk(INT32 page) {
 	char *buffer = (char *) calloc(PGSIZE, sizeof(char));
-//	char buffer[16];
-//	INT32 disk, sector;
-//	sector = page;
-//	if (page < 64) {
-//		disk = ((currentPCB->pid + 0) % MAX_NUMBER_OF_DISKS ) + 1;
-//	} else {
-//		disk = ((currentPCB->pid + 1) % MAX_NUMBER_OF_DISKS ) + 1;
-//	}
 
-//	INT32 disk = (currentPCB->pid + 1 + page / 128) % MAX_NUMBER_OF_DISKS;
-//	INT32 sector = (page + 896) % VIRTUAL_MEM_PAGES;
-	INT32 disk = (currentPCB->pid + page / 16) % MAX_NUMBER_OF_DISKS + 1;
+	INT32 disk = (currentPCB->pid + page / 4) % MAX_NUMBER_OF_DISKS + 1;
 	INT32 sector = page;
+
+//	INT32 disk = (currentPCB->pid % MAX_NUMBER_OF_DISKS ) + 1;
+//	INT32 sector = page;
 	requestForDisk(SYSNUM_DISK_READ, disk, sector, buffer);
 //	currentPCB->pageTable[page] = 0;
 	allocatePage(page);
