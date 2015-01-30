@@ -19,4 +19,10 @@ void myTest1m_1();
 
 void myTest1m_2();
 
+void myTest2i();
+
+void myTest2j();
+
+void myTest2jx();
+
 #endif /* MYTEST_H_ */

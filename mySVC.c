@@ -28,9 +28,21 @@ PidNode *PidEverExisted = NULL;
 
 INT32 LockingResult[5] = { 0, 0, 0, 0, 0 };
 
-INT32 DiskOccupation[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
+INT32 DiskOccupation[MAX_NUMBER_OF_DISKS ] = { -1, -1, -1, -1, -1, -1, -1, -1 };
 
 bool InterruptFinished = true;
+
+INT32 schedulerPrinter_DisplayGranularity = 0;
+
+INT32 schedulerPrinter_Count = 0;
+
+INT32 fault_DisplayGranularity = 0;
+
+INT32 fault_Count = 0;
+
+INT32 interrupt_DisplayGranularity = 0;
+
+INT32 interrupt_Count = 0;
 
 void osCreateProcess(void *starting_address) {
 	void *next_context;
@@ -214,71 +226,31 @@ void terminateProcess(INT32 pid, INT32 *errCode) {
 	}
 	switch (pidToTerminate) {
 	case -2: {
-		int j, k;
-//		for (j = 0; j < 7; j++) {
-//			for (k = 0; k < 10; k++) {
-//				if (j * 10 + k < PHYS_MEM_PGS) {
-//					printf("%d\t", RoundDistribution[j * 10 + k]);
-//				}
-//
-//			}
-//			printf("\n");
-//		}
 		*errCode = ERR_SUCCESS;
 		Z502Halt();
 	}
 		break;
-	case -1:
+	case -1: {
 		*errCode = ERR_SUCCESS;
 		numOfProcesses--;
 		INT32 tPid = currentPCB->pid;
 //		decide what to run next
-//		int i, j;
-//		for (i = 0; i < VIRTUAL_MEM_PAGES; i++) {
-//			if (SwappedPageDistribution[i] != 0) {
-//				printf("%d:%d\t", i, SwappedPageDistribution[i]);
-//			}
-//			if (i + 1 >= 20 && (i + 1) % 20 == 0) {
-//				printf("\n");
-//			}
-//		}
-//		printf("\n");
 		dispatch("Term", -1);
 		killPid(tPid);
 		removeMessageBox(tPid);
-//		if (InvertedPageTable) {
-
-//		for (i = 0; i < 7; i++) {
-//			for (j = 0; j < 10; j++) {
-//				if (i * 10 + j < PHYS_MEM_PGS) {
-//					if (InvertedPageTable[i * 10 + j]) {
-//						printf("%d\t", InvertedPageTable[i * 10 + j]->pid);
-//					} else {
-//						printf("N/A\t");
-//					}
-//				}
-//			}
-//			printf("\n\n");
-//		}
+//		int i;
 //		for (i = 0; i < PHYS_MEM_PGS ; i++) {
-//			if ((InvertedPageTable[i])
-//					&& (InvertedPageTable[i]->pid == currentPCB->pid)) {
-////				free(InvertedPageTable[i]);
-//				InvertedPageTable[i]->pid = -1;
-//				char *new_buffer = (char*) calloc(PGSIZE, sizeof(char));
-//				Z502WritePhysicalMemory(i, new_buffer);
+//			if (InvertedPageTable[i]
+//					&& InvertedPageTable[i]->pid == currentPCB->pid) {
+//				InvertedPageTable[i]->pageTable[InvertedPageTable[i]->page] =
+//				PTBL_ON_DISK_BIT;
+//				free(InvertedPageTable[i]);
+//				InvertedPageTable[i] = NULL;
 //			}
 //		}
-//		for (i = 0; i < VIRTUAL_MEM_PAGES; i++) {
-//			if ((currentPCB->pageTable[i] & PTBL_VALID_BIT) != 0) {
-//				InvertedPageTable[(currentPCB->pageTable[i] & PTBL_PHYS_PG_NO)] =
-//						NULL;
-//			}
-//		}
-//		}
-
 		Z502SwitchContext(SWITCH_CONTEXT_KILL_MODE,
 				(void *) (&currentPCB->context));
+	}
 		break;
 	default: {
 //		check the queues for pid and remove it
@@ -460,6 +432,7 @@ void sendMessage(INT32 recipient, char *message, INT32 sendLength,
 		*errCode = ERR_BAD_PARAM;
 		return;
 	}
+
 	MessageBox *box = NULL;
 	if (recipient == -1) {
 		if (!BroadcastMessageBox) {
@@ -551,6 +524,7 @@ void sendMessage(INT32 recipient, char *message, INT32 sendLength,
 			return;
 		}
 	}
+
 //	check box size and copy message
 	if (box->size == MESSAGE_BOX_CAPACITY) {
 		*errCode = ERR_BAD_PARAM;
@@ -636,6 +610,7 @@ void receiveMessage(INT32 sender, char *messageBuffer, INT32 receiveLength,
 							currentPCB->messageBox->tail = NULL;
 						}
 					}
+					free(message->content);
 					free(message);
 					currentPCB->messageBox->size--;
 					*errCode = ERR_SUCCESS;
@@ -706,18 +681,12 @@ void receiveMessage(INT32 sender, char *messageBuffer, INT32 receiveLength,
 
 void requestForDisk(INT16 action, INT32 disk_id, INT32 sector, char *data) {
 	char op[8];
-//	if (action == SYSNUM_DISK_READ) {
-//		sprintf(op, "Disk_RP");
-//	} else if (action == SYSNUM_DISK_WRITE) {
-//		sprintf(op, "Disk_WP");
-//	}
-//	while (true) {
-//		getMyLock(READYQUEUELOCK);
 
 	getMyLock(DISKQUEUELOCK);
 	DiskQueueNode *node = (DiskQueueNode *) calloc(1, sizeof(DiskQueueNode));
 	node->next = NULL;
 	node->data = NULL;
+//	Deal with action and data pointer in the node according to the action passed in
 	if (action == SYSNUM_DISK_READ) {
 		sprintf(op, "Disk_R");
 		node->data = data;
@@ -725,19 +694,16 @@ void requestForDisk(INT16 action, INT32 disk_id, INT32 sector, char *data) {
 
 	} else if (action == SYSNUM_DISK_WRITE) {
 		sprintf(op, "Disk_W");
-//		char temp[16];
-//		strncpy(temp, data, 16);
-//		node->data = (char *) calloc(PGSIZE, sizeof(char));
 		node->data = data;
-//		strncpy(node->data, data, 16);
-//		memcpy(node->data,data,PGSIZE);
 		node->action = WRITE;
 	}
 	node->disk_id = disk_id;
 	node->sector = sector;
 	node->pcb = currentPCB;
 	addToDiskQueue(node);
+//	If the disk is free now, start the task immediately
 	if (DiskOccupation[disk_id - 1] == -1) {
+//		State that the disk is occupied by the current process
 		DiskOccupation[disk_id - 1] = currentPCB->pid;
 		MEM_WRITE(Z502DiskSetID, &node->disk_id);
 		MEM_WRITE(Z502DiskSetSector, &node->sector);
@@ -768,7 +734,13 @@ void dispatch(char *op, INT32 time) {
 		p->previous = p->next = NULL;
 //		releaseMyLock(TIMERQUEUELOCK);
 		releaseMyLock(READYQUEUELOCK);
-//		schedulerPrinter(currentPCB->pid, p->pcb->pid, op, time);
+		if (schedulerPrinter_DisplayGranularity) {
+			schedulerPrinter_Count++;
+			if (schedulerPrinter_Count % schedulerPrinter_DisplayGranularity
+					== 0) {
+				schedulerPrinter(currentPCB->pid, p->pcb->pid, op, time);
+			}
+		}
 		currentPCB = p->pcb;
 		free(p);
 	} else {
@@ -796,14 +768,19 @@ void dispatch(char *op, INT32 time) {
 //			removeFromRSQueue(pcb->pid, &ReadyQueue, &q);
 			removeFromRSQueue(ReadyQueue->pcb->pid, &ReadyQueue, &q);
 			releaseMyLock(READYQUEUELOCK);
-//			schedulerPrinter(currentPCB->pid, q->pcb->pid, op, time);
+			if (schedulerPrinter_DisplayGranularity) {
+				schedulerPrinter_Count++;
+				if (schedulerPrinter_Count % schedulerPrinter_DisplayGranularity
+						== 0) {
+					schedulerPrinter(currentPCB->pid, q->pcb->pid, op, time);
+				}
+			}
 			currentPCB = q->pcb;
 			free(q);
 		} else {
 			Z502Halt();
 		}
 	}
-
 }
 
 void startTimer(INT32 timeToSet) {
@@ -899,6 +876,7 @@ INT32 checkProcessParams(char *process_name, void *entry, INT32 priority) {
 
 	getMyLock(READYQUEUELOCK);
 	getMyLock(TIMERQUEUELOCK);
+	getMyLock(DISKQUEUELOCK);
 	getMyLock(SUSPENDQUEUELOCK);
 	RSQueueNode *p = NULL;
 	INT32 i;
@@ -914,6 +892,7 @@ INT32 checkProcessParams(char *process_name, void *entry, INT32 priority) {
 			if (strcmp(p->pcb->process_name, process_name) == 0) {
 				if (i == 0) {
 					releaseMyLock(READYQUEUELOCK);
+					releaseMyLock(DISKQUEUELOCK);
 				}
 				releaseMyLock(SUSPENDQUEUELOCK);
 				releaseMyLock(TIMERQUEUELOCK);
@@ -924,6 +903,17 @@ INT32 checkProcessParams(char *process_name, void *entry, INT32 priority) {
 	}
 
 	releaseMyLock(SUSPENDQUEUELOCK);
+	DiskQueueNode *pD = DiskQueue;
+	while (pD) {
+		if (strcmp(pD->pcb->process_name, process_name) == 0) {
+			releaseMyLock(DISKQUEUELOCK);
+			releaseMyLock(TIMERQUEUELOCK);
+			return ERR_BAD_PARAM;
+		}
+		pD = pD->next;
+	}
+
+	releaseMyLock(DISKQUEUELOCK);
 	TimerQueueNode *pT = TimerQueue;
 	while (pT) {
 		if (strcmp(pT->pcb->process_name, process_name) == 0) {

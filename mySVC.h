@@ -106,9 +106,21 @@ PidNode *PidEverExisted;
 MessageBox *MessageBoxQueue;
 MessageBox *BroadcastMessageBox;
 
-INT32 DiskOccupation[8];
+INT32 DiskOccupation[MAX_NUMBER_OF_DISKS];
 
 bool InterruptFinished;
+
+INT32 schedulerPrinter_DisplayGranularity;
+
+INT32 schedulerPrinter_Count;
+
+INT32 fault_DisplayGranularity;
+
+INT32 fault_Count;
+
+INT32 interrupt_DisplayGranularity;
+
+INT32 interrupt_Count;
 
 void osCreateProcess(void *);
 

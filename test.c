@@ -2022,7 +2022,7 @@ void test2hx(void) {
 			// Now we are done with this slave - send it a message which will start it working.
 			// The iterations may not be quite right - we may be sending a message to a
 			// process that's already terminated, but that's OK
-			SEND_MESSAGE(ld->TargetPid, " ", 0, &ld->ErrorReturned);
+			SEND_MESSAGE(ld->TargetPid, " ", 1, &ld->ErrorReturned);
 		}     // End of For Index
 	}     // End of MASTER PROCESS
 

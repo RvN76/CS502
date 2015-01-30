@@ -57,7 +57,9 @@ void diskInterrupt(INT32 disk_id) {
 	DiskQueueNode *p = NULL, *p1 = NULL;
 	getMyLock(READYQUEUELOCK);
 	getMyLock(DISKQUEUELOCK);
+//	State that the disk is free now
 	DiskOccupation[disk_id - 1] = -1;
+//	Find the first node with disk_id and put the PCB into ReadyQueue
 	p = DiskQueue;
 	while (p) {
 		if (p->disk_id == disk_id) {
@@ -88,8 +90,10 @@ void diskInterrupt(INT32 disk_id) {
 	addToReadyQueue(node);
 //	getMyLock(DISKQUEUELOCK);
 	releaseMyLock(READYQUEUELOCK);
+//	See if there is another task on this disk. If so, start it.
 	while (p1) {
 		if (p1->disk_id == disk_id) {
+//			State that the disk is occupied by the process of p1->pcb
 			DiskOccupation[disk_id - 1] = p1->pcb->pid;
 			MEM_WRITE(Z502DiskSetID, &p1->disk_id);
 			MEM_WRITE(Z502DiskSetSector, &p1->sector);

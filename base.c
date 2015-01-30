@@ -63,9 +63,14 @@ void interrupt_handler(void) {
 
 	/** REMOVE THE NEXT SIX LINES **/
 	how_many_interrupt_entries++; /** TEMP **/
-	if (remove_this_in_your_code && (how_many_interrupt_entries < 20)) {
-//		printf("Interrupt_handler: Found device ID %d with status %d\n",
-//				device_id, status);
+	if (interrupt_DisplayGranularity != 0) {
+		interrupt_Count++;
+		if (interrupt_Count % interrupt_DisplayGranularity == 0) {
+			if (remove_this_in_your_code && (how_many_interrupt_entries < 20)) {
+				printf("Interrupt_handler: Found device ID %d with status %d\n",
+						device_id, status);
+			}
+		}
 	}
 
 	//Call the timerInterrupt() routine
@@ -106,8 +111,14 @@ void fault_handler(void) {
 	// Now read the status of this device
 	MEM_READ(Z502InterruptStatus, &status);
 
-//	printf("Fault_handler: Found vector type %d with value %d\n", device_id,
-//			status);
+	if (fault_DisplayGranularity != 0) {
+		fault_Count++;
+		if (fault_Count % fault_DisplayGranularity == 0) {
+			printf("Fault_handler: Found vector type %d with value %d\n",
+					device_id, status);
+		}
+	}
+
 	// Clear out this device - we're done with it
 	MEM_WRITE(Z502InterruptClear, &Index);
 
@@ -133,8 +144,8 @@ void fault_handler(void) {
 			Z502_PAGE_TBL_LENGTH = VIRTUAL_MEM_PAGES;
 		}
 		if (status < Z502_PAGE_TBL_LENGTH && status >= 0) {
-			if ((currentPCB->pageTable[status] & PTBL_MODIFIED_BIT) == 0) {
-				allocatePage(status);
+			if ((currentPCB->pageTable[status] & PTBL_ON_DISK_BIT) == 0) {
+				allocateFrame(status);
 			} else {
 				getThePageFromDisk(status);
 			}
@@ -247,25 +258,20 @@ void svc(SYSTEM_CALL_DATA *SystemCallData) {
 		break;
 //	Call to read from disk
 	case SYSNUM_DISK_READ:
-//		readFromDisk((INT32) SystemCallData->Argument[0],
-//				(INT32) SystemCallData->Argument[1],
-//				(char *) SystemCallData->Argument[2]);
-//		requestForDisk(call_type, (INT32) SystemCallData->Argument[0],
-//				(INT32) SystemCallData->Argument[1],
-//				(char *) SystemCallData->Argument[2]);
-//		break;
 //	Call to write to disk
 	case SYSNUM_DISK_WRITE:
-//		writeToDisk((INT32) SystemCallData->Argument[0],
-//				(INT32) SystemCallData->Argument[1],
-//				(char *) SystemCallData->Argument[2]);
-//	{
-//		DISK_DATA *d = (DISK_DATA *) calloc(1, sizeof(DISK_DATA));
-//		memcpy(d->char_data, (char *) SystemCallData->Argument[2], 16);
 		requestForDisk(call_type, (INT32) SystemCallData->Argument[0],
 				(INT32) SystemCallData->Argument[1],
 				(char *) SystemCallData->Argument[2]);
 //	}
+		break;
+//	call to define a shared area
+	case SYSNUM_DEFINE_SHARED_AREA:
+		defineSharedArea((INT32) SystemCallData->Argument[0],
+				(INT32) SystemCallData->Argument[1],
+				(char *) SystemCallData->Argument[2],
+				(INT32 *) SystemCallData->Argument[3],
+				(INT32 *) SystemCallData->Argument[4]);
 		break;
 //	other cases: report
 	default:
@@ -373,26 +379,45 @@ void osInit(int argc, char *argv[]) {
 
 		if (strcmp(argv[1], "test2a") == 0) {
 			testToRun = (void *) test2a;
+			memoryPrinter_DisplayGranularity = 1;
+			fault_DisplayGranularity = 1;
+			interrupt_DisplayGranularity = 1;
 		}
 
 		if (strcmp(argv[1], "test2b") == 0) {
 			testToRun = (void *) test2b;
+			memoryPrinter_DisplayGranularity = 1;
+			fault_DisplayGranularity = 1;
+			interrupt_DisplayGranularity = 1;
 		}
 
 		if (strcmp(argv[1], "test2c") == 0) {
 			testToRun = (void *) test2c;
+			schedulerPrinter_DisplayGranularity = 1;
+			fault_DisplayGranularity = 10;
+			interrupt_DisplayGranularity = 10;
 		}
 
 		if (strcmp(argv[1], "test2d") == 0) {
 			testToRun = (void *) test2d;
+			schedulerPrinter_DisplayGranularity = 10;
+			fault_DisplayGranularity = 10;
+			interrupt_DisplayGranularity = 10;
 		}
 
 		if (strcmp(argv[1], "test2e") == 0) {
 			testToRun = (void *) test2e;
+			schedulerPrinter_DisplayGranularity = 10;
+			memoryPrinter_DisplayGranularity = 100;
+			fault_DisplayGranularity = 100;
+			interrupt_DisplayGranularity = 10;
 		}
 
 		if (strcmp(argv[1], "test2f") == 0) {
 			testToRun = (void *) test2f;
+			memoryPrinter_DisplayGranularity = 200;
+			fault_DisplayGranularity = 100;
+			interrupt_DisplayGranularity = 100;
 		}
 
 		if (strcmp(argv[1], "test2g") == 0) {
@@ -401,6 +426,14 @@ void osInit(int argc, char *argv[]) {
 
 		if (strcmp(argv[1], "test2h") == 0) {
 			testToRun = (void *) test2h;
+		}
+
+		if (strcmp(argv[1], "test2i") == 0) {
+			testToRun = (void *) myTest2i;
+		}
+
+		if (strcmp(argv[1], "test2j") == 0) {
+			testToRun = (void *) myTest2j;
 		}
 	}
 
